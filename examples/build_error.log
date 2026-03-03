@@ -1,0 +1,19 @@
+# Example: AOSP Build Log (with errors)
+# Save this as build_error.log and run: alog analyze build_error.log
+
+[  1% 23/1892] Compiling frameworks/base/core/java/android/app/Activity.java
+[  2% 45/1892] Compiling frameworks/base/core/java/android/content/Context.java
+[  3% 67/1892] Building frameworks/base
+
+FAILED: out/soong/.intermediates/frameworks/av/media/libstagefright/libstagefright/android_arm64_armv8-a_shared/libstagefright.so
+clang++: error: linker command failed with exit code 1 (use -v to see invocation)
+ld: error: undefined symbol: _ZN7android10VehicleHal14getValueAsyncEiPFvNS0_12StatusCodeENS_8VehicleValueEPvES3_
+>>> referenced by VehicleHalManager.cpp:234 (/src/hardware/interfaces/automotive/vehicle/2.0/default/impl/vhal_v2_0/VehicleHalManager.cpp:234)
+>>>               out/soong/.intermediates/hardware/interfaces/automotive/vehicle/2.0/default/android.hardware.automotive.vehicle@2.0-service/android_arm64_armv8-a/obj/hardware/interfaces/automotive/vehicle/2.0/default/impl/vhal_v2_0/VehicleHalManager.o
+
+clang++: error: linker command failed with exit code 1
+ninja: error: '/src/out/soong/.intermediates/...libVehicleNetwork.so', needed by 'CarService', missing and no known rule to make it
+
+make: *** [ninja_wrapper] Error 1
+
+Build FAILED!

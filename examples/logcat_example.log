@@ -1,0 +1,19 @@
+01-15 10:23:41.123  1234  1234 V AudioFlinger: FastMixer sleeping
+01-15 10:23:41.124  1234  1234 V AudioFlinger: FastMixer sleeping
+01-15 10:23:41.200  2345  2345 D CarService: onCarDisconnected
+01-15 10:23:41.201  2345  2345 D CarService: bindService
+01-15 10:23:42.100  3456  3456 E VehicleHal: getProperty failed for propId=0x11600104 status=NOT_AVAILABLE
+01-15 10:23:42.101  3456  3456 E VehicleHal: Failed to subscribe property 0x11600104
+01-15 10:23:42.102  3456  3456 E CarPropertyManager: Property subscription failed for HVAC_FAN_SPEED
+01-15 10:23:42.300  4567  4567 W CarAudioService: Audio focus request failed: AUDIOFOCUS_REQUEST_FAILED
+01-15 10:23:42.301  4567  4567 E AudioManager: requestAudioFocus: AUDIOFOCUS_REQUEST_FAILED for usage USAGE_MEDIA
+01-15 10:23:43.100  1111  2222 D ActivityManager: START u0 {act=android.intent.action.MAIN cmp=com.android.car.media}
+01-15 10:23:43.200  5678  5678 E AndroidRuntime: FATAL EXCEPTION: main
+01-15 10:23:43.200  5678  5678 E AndroidRuntime: Process: com.android.car.media, PID: 5678
+01-15 10:23:43.200  5678  5678 E AndroidRuntime: java.lang.NullPointerException: Attempt to invoke virtual method on a null object reference
+01-15 10:23:43.200  5678  5678 E AndroidRuntime: 	at com.android.car.media.MediaActivity.onCarConnected(MediaActivity.java:342)
+01-15 10:23:43.200  5678  5678 E AndroidRuntime: 	at com.android.car.CarAppFocusManager.onAppFocusChanged(CarAppFocusManager.java:187)
+01-15 10:23:43.200  5678  5678 E AndroidRuntime: 	at android.os.Handler.handleCallback(Handler.java:938)
+01-15 10:23:43.201  5678  5678 I Process: Sending signal. PID: 5678 SIG: 9
+01-15 10:23:44.000  1234  1234 V AudioFlinger: FastMixer sleeping
+01-15 10:23:44.001  1234  1234 V AudioFlinger: FastMixer sleeping
