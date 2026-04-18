@@ -1,5 +1,6 @@
 # AILog — AI-Powered Android/AOSP Log Interpreter
 
+[![Tests](https://github.com/zoddiacc/AILog/actions/workflows/test.yml/badge.svg)](https://github.com/zoddiacc/AILog/actions/workflows/test.yml)
 [![Python 3.8+](https://img.shields.io/badge/python-3.8%2B-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
@@ -177,6 +178,14 @@ Stage 1: Rule-Based Noise Filter (instant, free)
 Stage 2: AI Analysis (only if errors detected, max 5 calls/session)
          |
 Terminal Display (color-coded lines, boxed AI analysis, stats bar)
+```
+
+## Development
+
+**Testing**: AILog has 136 unit tests covering all major modules. Tests run in CI across Python 3.8, 3.9, 3.10, 3.11, and 3.12 via GitHub Actions, with ruff linting.
+
+```bash
+python3 -m unittest discover -s tests -v
 ```
 
 ## Further Reading
