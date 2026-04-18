@@ -3,13 +3,12 @@
 import unittest
 import sys
 import os
-import json
 import tempfile
 import shutil
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
-from ailog.config_manager import ConfigManager, DEFAULT_CONFIG
+from ailog.config_manager import ConfigManager
 
 
 class TempConfigMixin:

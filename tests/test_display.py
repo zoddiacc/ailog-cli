@@ -20,7 +20,6 @@ class TestDisplayWidth(unittest.TestCase):
 
     def test_ansi_codes_stripped(self):
         # ANSI codes should not contribute to width
-        text = "\033[31mred\033[0m"
         # _display_width doesn't strip ANSI, but let's verify basic behavior
         self.assertGreaterEqual(_display_width("red"), 3)
 

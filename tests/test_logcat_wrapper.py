@@ -109,7 +109,8 @@ class TestReadSourceSnippet(unittest.TestCase):
         self.assertIsNone(result)
 
     def test_reads_with_marker(self):
-        import tempfile, os
+        import tempfile
+        import os
         content = "\n".join(f"line {i}" for i in range(1, 21))
         with tempfile.NamedTemporaryFile(mode='w', suffix='.kt', delete=False) as f:
             f.write(content)

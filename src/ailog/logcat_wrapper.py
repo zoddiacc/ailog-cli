@@ -5,7 +5,6 @@ Logcat wrapper: wraps adb logcat with real-time AI filtering and interpretation.
 import os
 import re
 import subprocess
-import sys
 import time
 import threading
 import signal
@@ -78,7 +77,7 @@ class LogcatWrapper:
                 result = subprocess.run(
                     ['adb', 'devices'], capture_output=True, text=True, timeout=5
                 )
-                lines = [l for l in result.stdout.strip().splitlines()[1:] if l.strip()]
+                lines = [ln for ln in result.stdout.strip().splitlines()[1:] if ln.strip()]
                 if len(lines) > 1:
                     self.display.error("Multiple devices connected. Specify one with -s SERIAL:")
                     for line in lines:
@@ -517,7 +516,7 @@ class LogcatWrapper:
             # Restore from backup
             try:
                 shutil.copy2(backup_path, src_path)
-                self.display.info(f'Restored original from backup.')
+                self.display.info('Restored original from backup.')
             except OSError:
                 pass
 
@@ -530,8 +529,8 @@ class LogcatWrapper:
             explanation = self.ai.explain_line(line, context)
             self._ai_calls += 1
             indent = '    '
-            for l in explanation.split('\n'):
-                print(f"\033[2m{indent}💡 {l}\033[0m")
+            for expl_line in explanation.split('\n'):
+                print(f"\033[2m{indent}💡 {expl_line}\033[0m")
         except RuntimeError:
             pass  # Silent fail for inline explanations
 

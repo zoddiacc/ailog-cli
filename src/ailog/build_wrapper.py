@@ -3,9 +3,7 @@ Build wrapper: intercepts AOSP make/m output and provides AI interpretation.
 """
 
 import subprocess
-import sys
 import time
-import threading
 from collections import deque
 from .ai_client import AIClient
 from .noise_filter import NoiseFilter
@@ -128,7 +126,7 @@ class BuildWrapper:
         if self._ai_calls >= self.max_ai_calls:
             return
 
-        relevant = [l for l in lines if self.filter.is_important(l)]
+        relevant = [line for line in lines if self.filter.is_important(line)]
         if not relevant:
             return
 

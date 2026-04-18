@@ -121,10 +121,10 @@ class Display:
                     split_at = inner_width
                 chunk = line[:split_at]
                 padding = inner_width - len(chunk)
-                print(self._fmt(f'║   ', color) + chunk + ' ' * padding + self._fmt('  ║', color))
+                print(self._fmt('║   ', color) + chunk + ' ' * padding + self._fmt('  ║', color))
                 line = line[split_at:].lstrip()
             padding = inner_width - len(line)
-            print(self._fmt(f'║   ', color) + line + ' ' * padding + self._fmt('  ║', color))
+            print(self._fmt('║   ', color) + line + ' ' * padding + self._fmt('  ║', color))
 
         print(self._fmt(border_bottom, color))
         print()

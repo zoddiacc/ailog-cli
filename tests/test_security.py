@@ -3,7 +3,6 @@
 import os
 import unittest
 import tempfile
-import json
 from unittest.mock import patch
 from src.ailog.ai_client import _redact_secrets
 from src.ailog.config_manager import ConfigManager

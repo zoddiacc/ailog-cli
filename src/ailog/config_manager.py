@@ -135,7 +135,7 @@ class ConfigManager:
             raise ValueError("Invalid URL: URL cannot be empty")
         parsed = urllib.parse.urlparse(url)
         if parsed.scheme not in ('http', 'https'):
-            raise ValueError(f"Invalid URL: must start with http:// or https://")
+            raise ValueError("Invalid URL: must start with http:// or https://")
         if not parsed.hostname:
             raise ValueError("Invalid URL: missing hostname")
 
