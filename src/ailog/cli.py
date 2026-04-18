@@ -38,6 +38,8 @@ def main():
                         help='Show what AI call would be made without sending it')
     parser.add_argument('--show-tokens', action='store_true',
                         help='Show estimated token count for AI calls')
+    parser.add_argument('--redact', action='store_true',
+                        help='Strip API keys, passwords, and tokens from log content before sending to AI')
 
     subparsers = parser.add_subparsers(dest='command', help='Command')
 
@@ -111,6 +113,7 @@ def main():
     config = ConfigManager()
     config.dry_run = args.dry_run
     config.show_tokens = args.show_tokens
+    config.redact = args.redact
 
     if args.command == 'config':
         handle_config(args, config, display)
@@ -154,6 +157,10 @@ def handle_config(args, config, display):
     if args.api_key:
         config.set_api_key(args.api_key)
         display.success(f"API key saved for {config.provider}")
+        display.warning(
+            "API key stored in plaintext in config file (permissions 0600). "
+            "For extra security, use env vars: OPENAI_API_KEY or ANTHROPIC_API_KEY"
+        )
         actions_taken = True
 
     if args.model:

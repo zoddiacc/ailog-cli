@@ -37,6 +37,12 @@ class BuildWrapper:
 
         # Try 'm' first (AOSP shortcut), fall back to make
         cmd = self._resolve_build_cmd(make_args)
+        if cmd is None:
+            self.display.error(
+                "No build command found (m or make). "
+                "Are you in an AOSP source tree? Run 'source build/envsetup.sh && lunch' first."
+            )
+            return
 
         self.display.header('AILog — AI Build Interpreter')
         self.display.info(f"Command: {' '.join(cmd)}")
@@ -183,6 +189,6 @@ class BuildWrapper:
         elif shutil.which('make'):
             base = ['make']
         else:
-            base = ['make']
+            return None
 
         return base + (extra_args if extra_args else [])

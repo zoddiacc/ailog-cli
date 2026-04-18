@@ -4,10 +4,31 @@ Supports: Ollama (local), OpenAI-compatible APIs, Anthropic.
 """
 
 import json
+import re
 import sys
 import time
 import urllib.request
 import urllib.error
+
+# Patterns for common secrets that should be redacted before sending to AI
+_SECRET_PATTERNS = [
+    re.compile(r'(?i)(api[_-]?key|apikey)\s*[:=]\s*\S+'),
+    re.compile(r'(?i)(secret|password|passwd|pwd)\s*[:=]\s*\S+'),
+    re.compile(r'(?i)(token|auth|bearer)\s*[:=]\s*\S+'),
+    re.compile(r'(?i)(access[_-]?key|secret[_-]?key)\s*[:=]\s*\S+'),
+    re.compile(r'sk-[a-zA-Z0-9]{20,}'),       # OpenAI keys
+    re.compile(r'sk-ant-[a-zA-Z0-9-]{20,}'),   # Anthropic keys
+    re.compile(r'ghp_[a-zA-Z0-9]{36,}'),       # GitHub PATs
+    re.compile(r'gho_[a-zA-Z0-9]{36,}'),       # GitHub OAuth
+    re.compile(r'AIza[a-zA-Z0-9_-]{35}'),      # Google API keys
+]
+
+
+def _redact_secrets(text):
+    """Strip common secret patterns from text."""
+    for pattern in _SECRET_PATTERNS:
+        text = pattern.sub('[REDACTED]', text)
+    return text
 
 
 SYSTEM_PROMPT = """You are an expert Android/AOSP and automotive software engineer specializing in log analysis.
@@ -72,6 +93,7 @@ class AIClient:
         self.timeout = config.get('timeout', 30)
         self.dry_run = getattr(config, 'dry_run', False)
         self.show_tokens = getattr(config, 'show_tokens', False)
+        self.redact = getattr(config, 'redact', False)
         self._system_prompt = config.get('system_prompt', '') or SYSTEM_PROMPT
 
     @staticmethod
@@ -81,6 +103,8 @@ class AIClient:
 
     def chat(self, system_prompt, user_message, max_tokens=1000, timeout=None):
         """Send a chat request to the configured provider. Returns response text."""
+        if self.redact:
+            user_message = _redact_secrets(user_message)
         if self.dry_run:
             prompt_tokens = self._estimate_tokens(system_prompt + user_message)
             preview = user_message[:200] + ('...' if len(user_message) > 200 else '')

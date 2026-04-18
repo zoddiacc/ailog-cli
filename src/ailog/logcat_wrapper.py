@@ -497,13 +497,29 @@ class LogcatWrapper:
             self.display.dim('  Fix skipped.')
             return
 
+        # Create a backup before applying the fix
+        import shutil
+        backup_path = src_path + '.bak'
+        try:
+            shutil.copy2(src_path, backup_path)
+        except OSError as e:
+            self.display.error(f'Could not create backup {backup_path}: {e}')
+            return
+
         # Write the fixed file
         try:
             with open(src_path, 'w') as f:
                 f.write(fixed_content)
             self.display.success(f'Fix applied to {src_path}')
+            self.display.dim(f'  Backup saved: {backup_path}')
         except OSError as e:
             self.display.error(f'Could not write {src_path}: {e}')
+            # Restore from backup
+            try:
+                shutil.copy2(backup_path, src_path)
+                self.display.info(f'Restored original from backup.')
+            except OSError:
+                pass
 
     def _explain_inline(self, line):
         """Explain a single error line inline (explain mode)."""

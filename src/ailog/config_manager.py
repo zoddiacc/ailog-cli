@@ -53,6 +53,9 @@ class ConfigManager:
         try:
             with open(self.config_path, 'w') as f:
                 json.dump(self._config, f, indent=2)
+            # Restrict file permissions to owner-only (0o600) since config may
+            # contain API keys in plaintext.
+            os.chmod(self.config_path, 0o600)
         except PermissionError:
             raise RuntimeError(
                 f"Permission denied writing to {self.config_path}. "
@@ -96,7 +99,12 @@ class ConfigManager:
         return ""
 
     def set_api_key(self, key):
-        """Set API key for current provider."""
+        """Set API key for current provider.
+
+        Note: Keys are stored in plaintext in config.json (permissions 0600).
+        Consider using environment variables (OPENAI_API_KEY, ANTHROPIC_API_KEY)
+        for additional security.
+        """
         provider = self.provider
         if provider == "ollama":
             # Accept it but warn — ollama doesn't need keys
@@ -106,6 +114,7 @@ class ConfigManager:
         elif provider == "anthropic":
             self._config["anthropic_api_key"] = key
         self._save()
+        self._plaintext_warning = True
 
     def get_model(self):
         """Get model for current provider."""
