@@ -1,6 +1,7 @@
 # AILog — AI-Powered Android/AOSP Log Interpreter
 
 [![Tests](https://github.com/zoddiacc/AILog/actions/workflows/test.yml/badge.svg)](https://github.com/zoddiacc/AILog/actions/workflows/test.yml)
+[![PyPI](https://img.shields.io/pypi/v/ailog-cli)](https://pypi.org/project/ailog-cli/)
 [![Python 3.8+](https://img.shields.io/badge/python-3.8%2B-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
@@ -28,14 +29,20 @@ AILog is a CLI tool that interprets Android build logs, logcat output, and AOSP 
 
 | Platform | `analyze` | `cat` | `build` | Install method |
 |----------|-----------|-------|---------|----------------|
-| Linux    | Yes | Yes | Yes | `install.sh` |
-| macOS    | Yes | Yes | Yes | `install.sh` |
-| Windows  | Yes | Yes | No (AOSP builds are Linux/macOS only) | Manual |
+| Linux    | Yes | Yes | Yes | `pip install ailog-cli` |
+| macOS    | Yes | Yes | Yes | `pip install ailog-cli` |
+| Windows  | Yes | Yes | No (AOSP builds are Linux/macOS only) | `pip install ailog-cli` |
 
-### Linux / macOS
+### pip (Recommended)
 
 ```bash
-git clone <repo-url> && cd AILog
+pip install ailog-cli
+```
+
+### Linux / macOS (from source)
+
+```bash
+git clone https://github.com/zoddiacc/AILog.git && cd AILog
 bash install.sh
 ```
 
@@ -48,8 +55,8 @@ echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc && source ~/.zshrc     #
 ### Windows
 
 ```powershell
-git clone <repo-url> && cd AILog
-python ailog.py --help
+pip install ailog-cli
+ailog --help
 ```
 
 ## Quick Start
