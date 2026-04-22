@@ -162,10 +162,11 @@ class Display:
         def label_row(label, value):
             """Print a label: value row with colored label."""
             text = value
-            if len(label) + 2 + len(text) > iw:
+            max_text = iw - 12  # label is always padded to 12 chars
+            if len(text) > max_text:
                 # Truncate value if too long
-                text = text[:iw - len(label) - 5] + '...'
-            pad = iw - 12 - len(text)
+                text = text[:max_text - 3] + '...'
+            pad = max_text - len(text)
             print(
                 fmt('┃', border_color) + '   '
                 + fmt(f'{label:<12}', Colors.DIM, Colors.BOLD)
@@ -196,11 +197,15 @@ class Display:
             label_row('Location', metadata['location'])
         if metadata.get('method'):
             # Indented under location
-            pad = iw - 12 - len(metadata['method']) - 2
+            method = metadata['method']
+            max_method = iw - 14  # 12 indent + 2 for "→ "
+            if len(method) > max_method:
+                method = method[:max_method - 3] + '...'
+            pad = iw - 12 - len(method) - 2
             print(
                 fmt('┃', border_color) + '   '
                 + ' ' * 12
-                + fmt('→ ' + metadata['method'], Colors.DIM)
+                + fmt('→ ' + method, Colors.DIM)
                 + ' ' * max(0, pad) + '  '
                 + fmt('┃', border_color)
             )
