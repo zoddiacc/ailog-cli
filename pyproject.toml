@@ -8,7 +8,7 @@ dynamic = ["version"]
 description = "AI-powered Android/AOSP log interpreter"
 readme = "README.md"
 requires-python = ">=3.8"
-license = "MIT"
+license = {text = "MIT"}
 authors = [{name = "Zoddiacc", email = "105343389+zoddiacc@users.noreply.github.com"}]
 keywords = ["android", "aosp", "logcat", "adb", "ai", "debugging", "cli"]
 classifiers = [
