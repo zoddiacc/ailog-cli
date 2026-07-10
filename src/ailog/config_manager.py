@@ -28,7 +28,7 @@ DEFAULT_CONFIG = {
 class ConfigManager:
     def __init__(self):
         config_dir = os.path.expanduser("~/.config/ailog")
-        os.makedirs(config_dir, exist_ok=True)
+        os.makedirs(config_dir, mode=0o700, exist_ok=True)
         self.config_path = os.path.join(config_dir, "config.json")
         self._config = self._load()
 
@@ -44,18 +44,30 @@ class ConfigManager:
                 backup = self.config_path + ".bak"
                 try:
                     shutil.copy2(self.config_path, backup)
+                    # The corrupted config may still hold a recoverable API key,
+                    # so lock the backup down too (copy2 preserves source perms).
+                    os.chmod(backup, 0o600)
                 except IOError:
                     pass
                 return DEFAULT_CONFIG.copy()
         return DEFAULT_CONFIG.copy()
 
     def _save(self):
+        # Write to a temp file created owner-only (0o600) from the start, then
+        # atomically replace the real config. This avoids a window where the
+        # file with a plaintext API key exists at the default (world-readable)
+        # umask before a later chmod — and a crash can't leave a partial or
+        # loose-permissioned config behind.
+        tmp_path = self.config_path + ".tmp"
         try:
-            with open(self.config_path, 'w') as f:
-                json.dump(self._config, f, indent=2)
-            # Restrict file permissions to owner-only (0o600) since config may
-            # contain API keys in plaintext.
-            os.chmod(self.config_path, 0o600)
+            fd = os.open(tmp_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            try:
+                with os.fdopen(fd, 'w') as f:
+                    json.dump(self._config, f, indent=2)
+            except BaseException:
+                os.unlink(tmp_path)
+                raise
+            os.replace(tmp_path, self.config_path)
         except PermissionError:
             raise RuntimeError(
                 f"Permission denied writing to {self.config_path}. "
