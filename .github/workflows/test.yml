@@ -45,3 +45,21 @@ jobs:
 
       - name: Run ruff
         run: ruff check src/ tests/
+
+  coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install package and coverage
+        run: pip install -e . coverage
+
+      - name: Run tests with coverage
+        run: |
+          coverage run -m unittest discover -s tests
+          coverage report
