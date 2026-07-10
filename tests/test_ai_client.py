@@ -6,7 +6,7 @@ import os
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
-from ailog.ai_client import AIClient
+from ailog.ai_client import AIClient, _strip_code_fences
 
 
 class MockConfig:
@@ -171,6 +171,28 @@ class TestTimeout(unittest.TestCase):
         del config._data['timeout']
         client = AIClient(config)
         self.assertEqual(client.timeout, 30)
+
+
+class TestStripCodeFences(unittest.TestCase):
+    """generate_fix output must never contain markdown fences (they'd be
+    written into the user's source file)."""
+
+    def test_plain_code_unchanged(self):
+        code = "fun main() {\n    println(\"hi\")\n}"
+        self.assertEqual(_strip_code_fences(code), code)
+
+    def test_strips_plain_fences(self):
+        self.assertEqual(_strip_code_fences("```\nval x = 1\n```"), "val x = 1")
+
+    def test_strips_language_tagged_fence(self):
+        self.assertEqual(_strip_code_fences("```kotlin\nval x = 1\n```"), "val x = 1")
+
+    def test_strips_fences_with_surrounding_whitespace(self):
+        self.assertEqual(_strip_code_fences("\n```java\nint x = 1;\n```\n"), "int x = 1;")
+
+    def test_inner_fences_preserved(self):
+        code = "/* example:\n```\nfoo\n```\n*/\nval x = 1"
+        self.assertEqual(_strip_code_fences(code), code)
 
 
 if __name__ == '__main__':

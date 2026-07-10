@@ -15,13 +15,13 @@ from .display import Display
 def main():
     parser = argparse.ArgumentParser(
         prog='ailog',
-        description='AI-powered Android/AOSP log interpreter',
+        description='AI log triage for AOSP and Android Automotive development',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""Examples:
   ailog build                        Run 'm' and interpret the output
   ailog build -- -j16 framework      Build with custom args
   ailog cat                          Start AI-filtered logcat
-  ailog cat -s MyTag                 Filter by tag with AI interpretation
+  ailog cat --focus VHAL --explain   Focus AI on a component, explain errors inline
   ailog analyze build.log            Analyze a saved build log
   ailog analyze logcat.txt --full    Full analysis without noise filtering
   ailog config --show                Show current configuration
@@ -133,13 +133,13 @@ def main():
 
         if args.command == 'build':
             wrapper = BuildWrapper(config, display)
-            wrapper.run(args)
+            sys.exit(wrapper.run(args) or 0)
         elif args.command == 'cat':
             wrapper = LogcatWrapper(config, display)
-            wrapper.run(args)
+            sys.exit(wrapper.run(args) or 0)
         elif args.command == 'analyze':
             analyzer = BatchAnalyzer(config, display)
-            analyzer.run(args)
+            sys.exit(analyzer.run(args) or 0)
 
 
 def handle_config(args, config, display):

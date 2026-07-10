@@ -46,13 +46,13 @@ class BatchAnalyzer:
             filepath = '<stdin>'
             if not content.strip():
                 self.display.warning("No input received from stdin.")
-                return
+                return 0
         else:
             filepath = args.file
 
             if not os.path.exists(filepath):
                 self.display.error(f"File not found: {filepath}")
-                return
+                return 1
 
             # Check for binary file
             try:
@@ -60,21 +60,21 @@ class BatchAnalyzer:
                     chunk = f.read(8192)
                     if b'\x00' in chunk:
                         self.display.error("This appears to be a binary file, not a log file.")
-                        return
+                        return 1
             except PermissionError:
                 self.display.error(f"Permission denied: {filepath}")
-                return
+                return 1
 
             try:
                 with open(filepath, 'r', errors='replace') as f:
                     content = f.read()
             except PermissionError:
                 self.display.error(f"Permission denied: {filepath}")
-                return
+                return 1
 
             if not content.strip():
                 self.display.warning("File is empty, nothing to analyze.")
-                return
+                return 0
 
         lines = content.splitlines()
 
@@ -114,11 +114,11 @@ class BatchAnalyzer:
 
         # For large files: chunk analysis
         if len(kept_lines) > self.CHUNK_SIZE:
-            self._analyze_chunked(kept_lines, errors, warnings, filtered_count,
-                                  log_type, args.focus, args.output)
+            return self._analyze_chunked(kept_lines, errors, warnings, filtered_count,
+                                         log_type, args.focus, args.output)
         else:
-            self._analyze_full(kept_lines, errors, warnings, filtered_count,
-                               log_type, args.focus, args.output)
+            return self._analyze_full(kept_lines, errors, warnings, filtered_count,
+                                      log_type, args.focus, args.output)
 
     def _analyze_full(self, lines, errors, warnings, filtered_count,
                       log_type, focus, output_file):
@@ -133,7 +133,7 @@ class BatchAnalyzer:
                     analysis = self.ai.analyze_logcat_batch(lines[:200], focus)
             except RuntimeError as e:
                 self.display.error(f"AI analysis failed: {e}")
-                return
+                return 1
 
         self.display.ai_box('Full Log Analysis', analysis, level='error' if errors else 'info')
 
@@ -150,7 +150,8 @@ class BatchAnalyzer:
                 self.display.ai_box('Priority Summary & Fix Order', summary, level='warning')
 
         if output_file:
-            self._save_report(output_file, analysis, summary)
+            return self._save_report(output_file, analysis, summary)
+        return 0
 
     def _analyze_chunked(self, lines, errors, warnings, filtered_count,
                          log_type, focus, output_file):
@@ -204,12 +205,13 @@ class BatchAnalyzer:
                     summary = self.ai.summarize_session(errors, warnings, filtered_count)
                 except RuntimeError as e:
                     self.display.warning(f"Final summary failed: {e}")
-                    return
 
-            self.display.ai_box('Priority Fix Order', summary, level='error')
+            if summary:
+                self.display.ai_box('Priority Fix Order', summary, level='error')
 
         if output_file:
-            self._save_report(output_file, '\n\n---\n\n'.join(chunk_analyses), summary)
+            return self._save_report(output_file, '\n\n---\n\n'.join(chunk_analyses), summary)
+        return 0
 
     def _save_report(self, path, analysis, summary=None):
         """Save analysis report to a file."""
@@ -218,7 +220,12 @@ class BatchAnalyzer:
         if summary:
             content += f"## Summary & Fix Priority\n\n{summary}\n"
 
-        with open(path, 'w') as f:
-            f.write(content)
+        try:
+            with open(path, 'w', encoding='utf-8') as f:
+                f.write(content)
+        except OSError as e:
+            self.display.error(f"Could not save report to {path}: {e}")
+            return 1
 
         self.display.success(f"Report saved to: {path}")
+        return 0
