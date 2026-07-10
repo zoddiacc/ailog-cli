@@ -5,289 +5,306 @@
 [![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-> Stop drowning in 50,000 lines. Let AI find what matters.
+> **Stop drowning in 50,000 log lines. Let AILog find what matters.**
 
-AILog is a CLI tool for **AOSP and Android Automotive (AAOS) platform developers** — the people debugging VHAL, CarService, HALs, and framework code in a terminal, not an IDE. It wraps `m` builds and `adb logcat`, filters the noise with rule-based patterns first (free, instant), then sends only the important lines to an AI model for root-cause analysis and fix suggestions.
+AILog reads your AOSP build errors, `adb logcat`, and full bugreports — and tells you
+what actually broke and how to fix it. It's built for **AOSP and Android Automotive
+(AAOS) platform developers** debugging VHAL, CarService, HALs, and native crashes in a
+terminal.
 
-By default the AI runs **locally via Ollama, so logs never leave your machine** — built for OEM and Tier-1 environments where they can't. It works just as well on regular Android app logcat, too.
-
-## Features
-
-- **AOSP/Automotive knowledge pack**: A built-in library of verified facts — VHAL properties, SELinux denials, native tombstones, CarWatchdog, power/user HAL, binder — that explains automotive errors *without* relying on the model's own knowledge, so even a small local model gives good answers ([details below](#the-knowledge-pack--how-small-models-punch-above-their-weight))
-- **Bugreport triage**: Point `ailog bugreport` at a giant `adb bugreport` and get a ranked list of crashes, ANRs, native tombstones, watchdog kills, and SELinux denials — each explained
-- **Automotive-aware**: Dedicated patterns for VHAL, CarService, CarAudio, EVS, CarWatchdog, power management
-- **AOSP build wrapper**: Wraps `m`/`make` with real-time error interpretation
-- **Local-first AI**: Ollama by default (logs stay on your machine); OpenAI-compatible APIs and Anthropic Claude optional
-- **Two-stage filtering**: Rule-based noise filter removes ~70% of lines before AI, saving tokens and time
-- **Logcat wrapper**: Wraps `adb logcat` with noise filtering and batch AI analysis
-- **File analyzer**: Batch analyze saved log files with chunked processing
-
-## Requirements
-
-- **Python 3.9+** (stdlib only — no pip packages needed)
-- **adb** (for `ailog cat`) — included with [Android SDK Platform Tools](https://developer.android.com/tools/releases/platform-tools)
-- For local AI: [Ollama](https://ollama.com) with a model pulled
-- For cloud AI: API key from OpenAI, Anthropic, Groq, Together, etc.
-
-## Installation
-
-| Platform | `analyze` | `bugreport` | `cat` | `build` | Install method |
-|----------|-----------|-----------|-------|---------|----------------|
-| Linux    | Yes | Yes | Yes | Yes | `pip install ailog-cli` |
-| macOS    | Yes | Yes | Yes | Yes | `pip install ailog-cli` |
-| Windows  | Yes | Yes | Yes | No (AOSP builds are Linux/macOS only) | `pip install ailog-cli` |
-
-`analyze` and `bugreport` work on any log file/bugreport (no device or adb needed);
-`cat` needs `adb`; `build` needs a Linux/macOS AOSP tree.
-
-### pip (Recommended)
+- 🔒 **Local-first** — runs on Ollama by default, so your logs never leave your machine
+- 🚗 **Automotive-aware** — ships a knowledge pack of VHAL, SELinux, tombstone & CarService facts
+- 🪶 **Zero dependencies** — pure Python standard library, installs anywhere
+- ⚡ **Works offline** — instant rule-based triage even with no AI model at all
 
 ```bash
 pip install ailog-cli
 ```
 
-### Linux / macOS (from source)
+---
 
-```bash
-git clone https://github.com/zoddiacc/AILog.git && cd AILog
-bash install.sh
+## See it in action
+
+Turn a 100 MB bugreport into a ranked list of real problems — instantly, with no model needed:
+
+```console
+$ ailog bugreport bugreport-car-2026.zip --no-ai
+
+═════════════════ AILog — Bugreport Triage ═════════════════
+ℹ️  Build fingerprint: Android/car_x86_64/emu:14/UQ1A.240101
+   java crashes: 1  │  native crashes: 1  │  ANRs: 1  │  SELinux: 1
+
+▶ 1. [NATIVE] Native crash — signal 6 (SIGABRT)
+   ↳ [Native crash] SIGABRT means abort() — often a failed CHECK/assert.
+     Read the 'abort message:' line first, then symbolize the backtrace.
+
+▶ 2. [ANR] ANR in com.oem.telemetry
+   ↳ App Not Responding: com.oem.telemetry
+
+▶ SELinux denials (1 unique)
+   ↳ [SELinux] Denied — add an allow rule to the domain's .te file
+     u:r:hal_vehicle_default:s0 → u:object_r:sysfs:s0 : file { read }
 ```
 
-If `~/.local/bin` is not in your PATH:
+Add a model and it explains each crash in depth. Point it at a live device
+(`ailog cat --explain`) or your AOSP build (`ailog build`) for the same treatment.
+
+---
+
+## Get started in 60 seconds
+
+**1. Install**
+
 ```bash
-echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc && source ~/.bashrc   # Bash
-echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc && source ~/.zshrc     # Zsh
-```
-
-### Windows
-
-```powershell
 pip install ailog-cli
-ailog --help
 ```
 
-## Quick Start
-
-### Ollama (Local, Free — Default)
+**2. Try it with zero setup** — the knowledge pack works with no AI at all:
 
 ```bash
-# 1. Install Ollama from https://ollama.com, or:
-brew install ollama              # macOS
-curl -fsSL https://ollama.ai/install.sh | sh   # Linux
-
-# 2. Start the server and pull a model
-ollama serve                     # keep running in background
-ollama pull qwen2.5-coder:3b    # in another terminal (~2 GB)
-
-# 3. Verify and select a model
-ailog config --list-models       # list all pulled models
-ailog config --model qwen2.5-coder:3b   # select the model to use
-
-# 4. Test it
-ailog analyze examples/build_error.log
+ailog bugreport your-bugreport.zip --no-ai
 ```
 
-> **Model tips**: `qwen2.5-coder:3b` is the default — fast and lightweight (~2 GB). For better results, try `qwen2.5-coder:7b` or `codellama:13b`. Pull any model with `ollama pull <name>`, then select it with `ailog config --model <name>`.
+**3. Turn on AI** — pick one:
 
-### Cloud Providers
+<details open>
+<summary><b>Option A · Local &amp; private (recommended, free)</b></summary>
 
 ```bash
-# OpenAI / Groq / Together / etc.
-ailog config --provider openai
-ailog config --api-key sk-...
-ailog config --model gpt-4o-mini
-ailog config --base-url https://api.groq.com/openai/v1   # for non-OpenAI providers
-
-# Anthropic Claude
-ailog config --provider anthropic
-ailog config --api-key sk-ant-...
+# Install Ollama once: https://ollama.com
+ollama pull qwen2.5-coder:3b     # ~2 GB, one-time download
 ```
 
-## Usage
+That's it — AILog uses Ollama by default. Nothing leaves your machine.
+</details>
+
+<details>
+<summary><b>Option B · Cloud (OpenAI / Anthropic / Groq / …)</b></summary>
 
 ```bash
-# Wrap an AOSP build (run from a lunch'd shell)
+ailog config --provider openai --api-key sk-...
+# or
+ailog config --provider anthropic --api-key sk-ant-...
+# or any OpenAI-compatible endpoint:
+ailog config --provider openai --base-url https://api.groq.com/openai/v1 --api-key ...
+```
+
+Secrets in your logs are redacted before anything is sent. See [Privacy](#privacy).
+</details>
+
+**4. Use it**
+
+```bash
+ailog analyze build.log          # analyze a saved log
+ailog cat --explain              # live logcat, explained inline
+ailog build                      # wrap an AOSP build
+ailog bugreport report.zip       # triage a bugreport
+```
+
+Run `ailog --help` or `ailog <command> --help` for everything.
+
+---
+
+## Why AILog is different
+
+Most people run a **small local model** (the default is `qwen2.5-coder:3b`) that knows
+almost nothing about VHAL, CarService, SELinux, or tombstones. A generic "pipe the log
+to an LLM" tool gives weak or wrong answers for automotive internals as a result.
+
+AILog keeps the domain intelligence in **curated data it ships**, not the model's
+weights. A built-in [knowledge pack](#the-knowledge-pack) maps log signatures to
+verified facts — so even a tiny local model gives genuinely good answers, and the
+common cases are explained instantly with **no AI at all**.
+
+---
+
+## What you can do
+
+| Command | What it does | Needs |
+|---------|--------------|-------|
+| `ailog analyze <file>` | Analyze a saved build/logcat file | a file |
+| `ailog bugreport <file>` | Triage an `adb bugreport` (.zip/.txt) | a file |
+| `ailog cat` | AI-filtered live `adb logcat` | `adb` + device |
+| `ailog build` | Wrap an AOSP `m`/`make` build | AOSP tree (Linux/macOS) |
+| `ailog config` | Configure provider, model, keys | — |
+
+```bash
+# Analyze
+ailog analyze logcat.txt --focus CarService      # focus the AI on a component
+ailog analyze build.log --output report.md       # save a markdown report
+
+# Bugreport triage
+ailog bugreport report.zip --no-ai               # instant, offline, no model
+ailog bugreport report.zip --focus com.oem.app   # only issues touching a package
+
+# Live logcat
+ailog cat --explain                              # explain each error inline
+ailog cat --focus VHAL --noise-level high        # focus + aggressive filtering
+ailog cat -p com.example.app --explain           # filter to one app
+
+# AOSP build (run from a lunch'd shell)
 ailog build
 ailog build -- -j16 framework
 
-# Live logcat with AI
-ailog cat --focus VHAL --noise-level high        # Focus on a component + aggressive filtering
-ailog cat --explain                              # AI explains each error inline
-ailog cat -s DEVICE_SERIAL --explain             # When multiple devices connected
-ailog cat -p com.example.myapp --explain         # App development: filter to one package
-
-# Analyze a saved log file
-ailog analyze build.log
-ailog analyze logcat.txt --focus CarService
-ailog analyze build.log --output report.md
-
-# Triage an adb bugreport (crashes, ANRs, native tombstones, SELinux denials)
-ailog bugreport bugreport-device-2026.zip
-ailog bugreport bugreport.zip --no-ai            # Instant triage, no model needed
-ailog bugreport bugreport.zip --focus com.oem.dashboard --output triage.md
+# Machine-readable output for CI
+ailog --json bugreport report.zip --no-ai | jq '.issue_counts'
 ```
 
-## Commands
+<details>
+<summary><b>All flags (per command)</b></summary>
 
-### Global options
-
-These apply to any command (place them before the subcommand, e.g. `ailog --redact cat`):
+**Global** (place before the subcommand, e.g. `ailog --json analyze x.log`)
 
 | Flag | Description |
 |------|-------------|
-| `--redact` / `--no-redact` | Force secret redaction on/off before sending log content to AI. **On by default for cloud providers, off for local Ollama.** |
-| `--json` | Machine-readable JSON output (for `analyze` and `bugreport`) — ideal for CI pipelines |
-| `--dry-run` | Show what AI call would be made without sending it |
-| `--show-tokens` | Print estimated token counts for AI calls |
+| `--json` | Machine-readable JSON output (`analyze`, `bugreport`) |
+| `--redact` / `--no-redact` | Force secret redaction on/off (on by default for cloud) |
+| `--dry-run` | Show the AI call without sending it |
+| `--show-tokens` | Print estimated token counts |
 | `--no-color` | Disable colored output |
 
-With `--json`, all decorative output is suppressed and a single JSON document is
-printed to stdout (diagnostics go to stderr), so you can pipe results into `jq`
-or a CI step: `ailog --json bugreport br.zip --no-ai | jq '.issue_counts'`.
+**`ailog analyze <file>`** — `--type build\|logcat\|auto`, `--full` (no filtering), `--output <path>`, `--focus <keyword>`
 
-> **Privacy:** with local Ollama (the default) nothing leaves your machine. When you switch to a cloud provider, secrets (API keys, tokens, passwords, JWTs, etc.) are redacted from log content and source files by default — pass `--no-redact` only if you understand the implications.
+**`ailog bugreport <file>`** — `--no-ai` (offline triage), `--focus <keyword>`, `--output <path>`
 
-### `ailog analyze <file>`
+**`ailog cat`** — `-s/--device <serial>`, `-p/--package <pkg>`, `--noise-level low\|medium\|high`, `--focus <tag>`, `--explain`, `--no-source`, `--batch-interval <sec>`
 
-| Flag | Description |
-|------|-------------|
-| `--type build\|logcat\|auto` | Log type (default: auto-detect) |
-| `--full` | Disable noise filtering |
-| `--output <path>` | Save report to file |
-| `--focus <keyword>` | Focus AI on specific component |
+**`ailog build`** — `--no-filter`, `--summary-only`, `--module <name>`
+</details>
 
-### `ailog build [-- make args]`
-
-| Flag | Description |
-|------|-------------|
-| `--no-filter` | Show all logs |
-| `--summary-only` | Hide raw logs, show AI summary only |
-| `--module <name>` | Module hint for better AI context |
-
-### `ailog cat [adb logcat args]`
-
-| Flag | Description |
-|------|-------------|
-| `-s, --device <serial>` | Target device when multiple are connected |
-| `-p, --package <pkg>` | Filter by app package name (resolves PID automatically) |
-| `--noise-level low\|medium\|high` | Filtering aggressiveness |
-| `--focus <tag/keyword>` | Focus AI attention |
-| `--explain` | Inline AI explanations for each error |
-| `--no-source` | Don't read source files for crash-fix suggestions |
-| `--batch-interval <seconds>` | AI summary interval (default: 5) |
-
-### `ailog bugreport <file>`
-
-Triage an `adb bugreport` (`.zip` or `.txt`) — extracts Java crashes, native
-tombstones, ANRs, watchdog kills, and SELinux denials, and explains each using
-the AOSP/Automotive knowledge pack (and optionally AI).
-
-| Flag | Description |
-|------|-------------|
-| `--no-ai` | Knowledge-pack triage only, no AI calls (works fully offline) |
-| `--focus <keyword>` | Only show issues mentioning this package/keyword |
-| `--output <path>` | Save the triage report to a markdown file |
-
-### `ailog config`
-
-```bash
-ailog config --show              # Show current config
-ailog config --provider ollama   # Switch provider
-ailog config --api-key sk-xxx    # Set API key
-ailog config --model <name>      # Set model
-ailog config --base-url <url>    # Custom base URL
-ailog config --list-models       # List available Ollama models
-ailog config --set KEY=VALUE     # Set any config key (e.g. --set noise_level=high)
-ailog config --reset             # Reset to defaults
-```
+---
 
 ## Configuration
 
-Config file: `~/.config/ailog/config.json`
+AILog works out of the box with Ollama — you only need `config` to switch providers or
+tune behavior.
+
+```bash
+ailog config --show                       # see current settings
+ailog config --provider anthropic         # switch provider
+ailog config --model qwen2.5-coder:7b     # pick a model
+ailog config --list-models                # list installed Ollama models
+ailog config --set noise_level=high       # set any option (below)
+ailog config --reset                      # back to defaults
+```
+
+Config lives at `~/.config/ailog/config.json` (created with `0600` permissions). API
+keys can also come from `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` env vars, which take
+precedence.
+
+<details>
+<summary><b>All config keys</b></summary>
 
 | Key | Default | Description |
 |-----|---------|-------------|
-| `provider` | `ollama` | AI provider: ollama, openai, anthropic |
+| `provider` | `ollama` | `ollama`, `openai`, or `anthropic` |
+| `ollama_model` | `qwen2.5-coder:3b` | Local model (try `:7b` for better results) |
 | `ollama_url` | `http://localhost:11434` | Ollama server URL |
-| `ollama_model` | `qwen2.5-coder:3b` | Ollama model |
-| `openai_url` | `https://api.openai.com/v1` | OpenAI-compatible base URL |
 | `openai_model` | `gpt-4o-mini` | OpenAI model |
+| `openai_url` | `https://api.openai.com/v1` | OpenAI-compatible base URL |
 | `anthropic_model` | `claude-sonnet-4-20250514` | Anthropic model |
-| `noise_level` | `medium` | Default noise filter level (low/medium/high) |
-| `batch_interval` | `5` | Seconds between AI batches |
+| `noise_level` | `medium` | Filter aggressiveness: `low`/`medium`/`high` |
+| `batch_interval` | `5` | Seconds between AI batches (live `cat`) |
 | `max_ai_calls` | `5` | Max AI calls per session |
 | `timeout` | `30` | AI request timeout (seconds) |
-| `system_prompt` | `""` | Override the AI system prompt (empty = built-in) |
+| `system_prompt` | `""` | Override the AI system prompt |
 
-Any of these can be set with `ailog config --set key=value`.
+Set any of these with `ailog config --set key=value`.
+</details>
 
-API keys can also be set via environment variables: `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`.
+### Privacy
 
-## How It Works
+With local Ollama (the default) **nothing leaves your machine** — ideal for OEM and
+Tier-1 environments. When you use a cloud provider, secrets (API keys, tokens,
+passwords, JWTs, …) are **redacted from log content and source files by default**
+before anything is sent. Pass `--no-redact` only if you understand the implications.
 
-```
-Input (log file, adb logcat, bugreport, or make output)
-         |
-Stage 1: Rule-Based Noise Filter (instant, free) — drops ~70% of lines
-         |
-Stage 2: Knowledge Pack lookup — matches known AOSP/Automotive signatures
-         |         ├─ produces an instant, always-correct hint (no AI needed)
-         |         └─ supplies verified facts as context for the AI step
-         |
-Stage 3: AI Analysis (only if errors detected) — explains the rest,
-         grounded in the facts from Stage 2
-         |
-Terminal Display (color-coded lines, boxed AI analysis, stats bar)
-```
+---
 
-## The knowledge pack — how small models punch above their weight
+## Requirements
 
-Most people running this tool use a **small local model** (the default is
-`qwen2.5-coder:3b`) that knows little about VHAL, CarService, SELinux, or native
-tombstones. A generic "pipe the log to an LLM" tool gives weak or wrong answers
-for automotive platform issues as a result.
+- **Python 3.9+** (standard library only — no pip dependencies)
+- **adb** for `ailog cat` — from [Android SDK Platform Tools](https://developer.android.com/tools/releases/platform-tools)
+- **Ollama** for local AI ([ollama.com](https://ollama.com)), or an API key for cloud AI
 
-AILog fixes this by keeping the domain intelligence in **curated data it ships**,
-not in the model's weights. A built-in knowledge pack maps log signatures to
-verified facts (what a VHAL property means and which `Car.PERMISSION_*` it needs,
-how to read an `avc: denied` line, what a `SIGABRT` tombstone implies, and so on).
-It's used two ways:
+| Platform | `analyze` · `bugreport` | `cat` | `build` |
+|----------|:---:|:---:|:---:|
+| Linux / macOS | ✅ | ✅ | ✅ |
+| Windows | ✅ | ✅ | ❌ (AOSP builds are Linux/macOS only) |
 
-1. **Instant hints, no AI** — when a line matches a known signature, you get an
-   always-correct one-liner immediately. This works fully offline, which is why
-   `ailog bugreport --no-ai` is genuinely useful with no model at all.
-2. **Grounded AI answers** — the matching facts are injected into the AI prompt as
-   authoritative context, so a small local model *summarizes known-good knowledge*
-   instead of guessing.
+`analyze` and `bugreport` need only a file — no device or adb.
 
-The pack currently covers ~35 error signatures plus ~80 VHAL properties across
-powertrain, energy/EV, HVAC, body, power management, user HAL, watchdog, cluster,
-and diagnostics — and it's pure data, so it grows without code changes.
-`tools/gen_vhal_knowledge.py` can extend the VHAL coverage straight from a
-`VehicleProperty.aidl` in an AOSP tree.
-
-## Development
-
-**Testing**: AILog has an extensive unit-test suite covering all major modules. Tests run in CI across Python 3.8, 3.9, 3.10, 3.11, and 3.12 via GitHub Actions, with ruff linting.
+<details>
+<summary><b>Install from source</b></summary>
 
 ```bash
-python3 -m unittest discover -s tests -v
+git clone https://github.com/zoddiacc/AILog.git && cd AILog
+bash install.sh                 # installs to ~/.local/bin
+# or run directly without installing:
+python3 run.py --help
 ```
+
+If `~/.local/bin` isn't on your PATH:
+
+```bash
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc && source ~/.zshrc
+```
+</details>
+
+---
+
+## How it works
+
+```
+Input (log file, adb logcat, bugreport, or build output)
+        │
+Stage 1 · Rule-based noise filter    → drops ~70% of lines (instant, free)
+        │
+Stage 2 · Knowledge-pack lookup      → instant hint (no AI) + facts for the AI
+        │
+Stage 3 · AI analysis (if needed)    → explains the rest, grounded in Stage 2
+        │
+Terminal output (color-coded lines, boxed analysis, stats)
+```
+
+### The knowledge pack
+
+The heart of AILog. It maps log signatures to verified AOSP/Automotive facts (what a
+VHAL property means and which `Car.PERMISSION_*` it needs, how to read an `avc: denied`
+line, what a `SIGABRT` tombstone implies), used two ways:
+
+1. **Instant hints, no AI** — a matching line gets an always-correct one-liner
+   immediately. This is why `ailog bugreport --no-ai` is genuinely useful offline.
+2. **Grounded AI answers** — the matching facts are injected into the prompt as
+   authoritative context, so a small local model summarizes known-good knowledge
+   instead of guessing.
+
+It currently covers **35+ error signatures** and **80+ VHAL properties** (powertrain,
+energy/EV, HVAC, body, power/user HAL, watchdog, cluster, diagnostics). It's pure data,
+so it grows without code changes — and `tools/gen_vhal_knowledge.py` can generate VHAL
+entries straight from a `VehicleProperty.aidl` in an AOSP tree.
+
+---
 
 ## Contributing
 
-Contributions are welcome — especially new **knowledge-pack entries** (VHAL
-properties, SELinux/CarService/build error signatures), which are pure data and a
-great first PR. See **[CONTRIBUTING.md](CONTRIBUTING.md)** for the dev setup and
-workflow, and **[SECURITY.md](SECURITY.md)** to report vulnerabilities privately.
+Contributions are welcome — especially new **knowledge-pack entries** (VHAL properties,
+SELinux/CarService/build signatures), which are pure data and a great first PR. See
+**[CONTRIBUTING.md](CONTRIBUTING.md)** for setup, and **[SECURITY.md](SECURITY.md)** to
+report vulnerabilities privately.
 
-## Further Reading
+```bash
+python3 -m unittest discover -s tests -v     # run the test suite
+ruff check src/ tests/ tools/                # lint
+```
 
-- **[TESTING.md](TESTING.md)** — Step-by-step guide to test AILog with a real Android app
-- **[UNINSTALL.md](UNINSTALL.md)** — How to completely remove AILog
-- **[ARCHITECTURE.md](ARCHITECTURE.md)** — Technical architecture and design decisions
-- **[CONTRIBUTING.md](CONTRIBUTING.md)** — How to contribute
-- **[CHANGELOG.md](CHANGELOG.md)** — Version history
+Tests run in CI across Python 3.9–3.14 with ruff linting.
+
+## Further reading
+
+- **[ARCHITECTURE.md](ARCHITECTURE.md)** — design and internals
+- **[TESTING.md](TESTING.md)** — testing against a real Android device
+- **[CONTRIBUTING.md](CONTRIBUTING.md)** · **[CHANGELOG.md](CHANGELOG.md)** · **[UNINSTALL.md](UNINSTALL.md)**
 
 ## License
 
