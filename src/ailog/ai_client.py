@@ -5,6 +5,7 @@ Supports: Ollama (local), OpenAI-compatible APIs, Anthropic.
 
 import json
 import re
+import socket
 import sys
 import time
 import urllib.request
@@ -234,9 +235,15 @@ class AIClient:
                 self._handle_url_error(e)
             except json.JSONDecodeError:
                 raise RuntimeError("Failed to parse AI response as JSON.")
-            except TimeoutError:
+            except (TimeoutError, socket.timeout):
+                # socket.timeout is a distinct class on Python 3.8/3.9 (only aliased
+                # to TimeoutError from 3.10); a read-timeout raises it directly.
                 raise RuntimeError(
                     "AI request timed out. Check your connection or try a smaller model."
+                )
+            except ConnectionResetError:
+                raise RuntimeError(
+                    "Connection to the AI provider was reset. Please try again."
                 )
 
     def _parse_openai_response(self, result):

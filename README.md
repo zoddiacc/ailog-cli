@@ -2,7 +2,7 @@
 
 [![Tests](https://github.com/zoddiacc/AILog/actions/workflows/test.yml/badge.svg)](https://github.com/zoddiacc/AILog/actions/workflows/test.yml)
 [![PyPI](https://img.shields.io/pypi/v/ailog-cli)](https://pypi.org/project/ailog-cli/)
-[![Python 3.8+](https://img.shields.io/badge/python-3.8%2B-blue.svg)](https://www.python.org/downloads/)
+[![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 > Stop drowning in 50,000 lines. Let AI find what matters.
@@ -24,7 +24,7 @@ By default the AI runs **locally via Ollama, so logs never leave your machine** 
 
 ## Requirements
 
-- **Python 3.8+** (stdlib only — no pip packages needed)
+- **Python 3.9+** (stdlib only — no pip packages needed)
 - **adb** (for `ailog cat`) — included with [Android SDK Platform Tools](https://developer.android.com/tools/releases/platform-tools)
 - For local AI: [Ollama](https://ollama.com) with a model pulled
 - For cloud AI: API key from OpenAI, Anthropic, Groq, Together, etc.
@@ -129,6 +129,19 @@ ailog bugreport bugreport.zip --focus com.oem.dashboard --output triage.md
 
 ## Commands
 
+### Global options
+
+These apply to any command (place them before the subcommand, e.g. `ailog --redact cat`):
+
+| Flag | Description |
+|------|-------------|
+| `--redact` / `--no-redact` | Force secret redaction on/off before sending log content to AI. **On by default for cloud providers, off for local Ollama.** |
+| `--dry-run` | Show what AI call would be made without sending it |
+| `--show-tokens` | Print estimated token counts for AI calls |
+| `--no-color` | Disable colored output |
+
+> **Privacy:** with local Ollama (the default) nothing leaves your machine. When you switch to a cloud provider, secrets (API keys, tokens, passwords, JWTs, etc.) are redacted from log content and source files by default — pass `--no-redact` only if you understand the implications.
+
 ### `ailog analyze <file>`
 
 | Flag | Description |
@@ -155,6 +168,7 @@ ailog bugreport bugreport.zip --focus com.oem.dashboard --output triage.md
 | `--noise-level low\|medium\|high` | Filtering aggressiveness |
 | `--focus <tag/keyword>` | Focus AI attention |
 | `--explain` | Inline AI explanations for each error |
+| `--no-source` | Don't read source files for crash-fix suggestions |
 | `--batch-interval <seconds>` | AI summary interval (default: 5) |
 
 ### `ailog bugreport <file>`

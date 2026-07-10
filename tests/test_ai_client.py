@@ -3,6 +3,7 @@
 import unittest
 import sys
 import os
+from unittest.mock import patch
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
@@ -171,6 +172,32 @@ class TestTimeout(unittest.TestCase):
         del config._data['timeout']
         client = AIClient(config)
         self.assertEqual(client.timeout, 30)
+
+
+class TestTimeoutHandling(unittest.TestCase):
+    """Read-timeouts must raise a friendly RuntimeError, not leak the raw error.
+
+    On Python 3.8/3.9 a read-timeout raises socket.timeout, which is NOT a subclass
+    of TimeoutError there, so it must be caught explicitly.
+    """
+
+    def _client(self):
+        return AIClient(MockConfig())
+
+    def test_socket_timeout_becomes_runtimeerror(self):
+        import socket
+        client = self._client()
+        with patch('urllib.request.urlopen', side_effect=socket.timeout('timed out')):
+            with self.assertRaises(RuntimeError) as ctx:
+                client.chat('sys', 'hello')
+        self.assertIn('timed out', str(ctx.exception).lower())
+
+    def test_connection_reset_becomes_runtimeerror(self):
+        client = self._client()
+        with patch('urllib.request.urlopen', side_effect=ConnectionResetError()):
+            with self.assertRaises(RuntimeError) as ctx:
+                client.chat('sys', 'hello')
+        self.assertIn('reset', str(ctx.exception).lower())
 
 
 class TestStripCodeFences(unittest.TestCase):

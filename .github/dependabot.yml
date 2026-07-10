@@ -1,0 +1,10 @@
+version: 2
+updates:
+  # Keep GitHub Actions pinned versions up to date. AILog has no runtime
+  # dependencies (stdlib only), so the CI actions are the whole supply chain.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "ci"
