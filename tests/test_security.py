@@ -52,6 +52,49 @@ class TestRedactSecrets(unittest.TestCase):
         result = _redact_secrets(text)
         self.assertNotIn('AIzaSy', result)
 
+    def test_authorization_bearer_header(self):
+        text = "D/OkHttp: Authorization: Bearer abcDEF123456ghiJKL789mno"
+        result = _redact_secrets(text)
+        self.assertNotIn('abcDEF123456', result)
+        self.assertIn('[REDACTED]', result)
+
+    def test_jwt(self):
+        text = ("resp eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9."
+                "eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0")
+        result = _redact_secrets(text)
+        self.assertNotIn('eyJhbGci', result)
+
+    def test_aws_access_key_id(self):
+        text = "aws key AKIAIOSFODNN7EXAMPLE in config"
+        result = _redact_secrets(text)
+        self.assertNotIn('AKIAIOSFODNN7EXAMPLE', result)
+
+    def test_slack_token(self):
+        # Assembled at runtime so secret scanners / push protection don't flag it
+        fake = "xoxb" + "-123456789012-" + "abcdefGHIJKLmnop"
+        result = _redact_secrets(fake)
+        self.assertNotIn("123456789012", result)
+
+    def test_pem_private_key(self):
+        text = ("-----BEGIN RSA PRIVATE KEY-----\n"
+                "MIIEpAIBAAKCAQEA1234567890\n"
+                "-----END RSA PRIVATE KEY-----")
+        result = _redact_secrets(text)
+        self.assertNotIn('MIIEpAIBAAKCAQEA', result)
+        self.assertIn('[REDACTED PRIVATE KEY]', result)
+
+    def test_url_credentials_keep_host(self):
+        text = "cloning https://alice:s3cr3tp4ss@github.com/org/repo.git"
+        result = _redact_secrets(text)
+        self.assertNotIn('s3cr3tp4ss', result)
+        self.assertIn('github.com', result)  # host preserved
+
+    def test_url_query_param_secret(self):
+        text = "GET https://api.example.com/v1?token=abc123secretvalue&page=2"
+        result = _redact_secrets(text)
+        self.assertNotIn('abc123secretvalue', result)
+        self.assertIn('page=2', result)  # non-secret param preserved
+
 
 class TestSanitizeTerminal(unittest.TestCase):
     """Untrusted log/AI text must not carry terminal escape sequences."""
@@ -124,6 +167,32 @@ class TestConfigFilePermissions(unittest.TestCase):
 
             mode = oct(os.stat(config_path).st_mode & 0o777)
             self.assertEqual(mode, '0o600')
+
+    def test_config_never_world_readable_during_save(self):
+        """The temp file must be 0600 from creation — no world-readable window."""
+        seen_modes = []
+        real_open = os.open
+
+        def spy_open(path, flags, mode=0o777, *a, **k):
+            fd = real_open(path, flags, mode, *a, **k)
+            if (flags & os.O_CREAT) and str(path).endswith('.tmp'):
+                seen_modes.append(os.stat(path).st_mode & 0o777)
+            return fd
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config_path = os.path.join(tmpdir, 'config.json')
+            with patch.object(ConfigManager, '__init__', lambda self: None):
+                cm = ConfigManager.__new__(ConfigManager)
+                cm.config_path = config_path
+                cm._config = {"provider": "openai", "openai_api_key": "sk-secret"}
+                with patch('os.open', spy_open):
+                    cm._save()
+
+            self.assertTrue(seen_modes, "temp file was not created via os.open")
+            for m in seen_modes:
+                self.assertEqual(m, 0o600)
+            self.assertFalse(os.path.exists(config_path + '.tmp'))  # temp cleaned up
+            self.assertEqual(os.stat(config_path).st_mode & 0o777, 0o600)
 
 
 if __name__ == '__main__':

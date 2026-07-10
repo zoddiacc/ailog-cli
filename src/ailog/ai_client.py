@@ -10,24 +10,46 @@ import time
 import urllib.request
 import urllib.error
 
-# Patterns for common secrets that should be redacted before sending to AI
+# (pattern, replacement) pairs for common secrets, redacted before sending to AI.
+# Most collapse to [REDACTED]; URL patterns keep structure (scheme/host/param name)
+# so the redacted log stays readable.
 _SECRET_PATTERNS = [
-    re.compile(r'(?i)(api[_-]?key|apikey)\s*[:=]\s*\S+'),
-    re.compile(r'(?i)(secret|password|passwd|pwd)\s*[:=]\s*\S+'),
-    re.compile(r'(?i)(token|auth|bearer)\s*[:=]\s*\S+'),
-    re.compile(r'(?i)(access[_-]?key|secret[_-]?key)\s*[:=]\s*\S+'),
-    re.compile(r'sk-[a-zA-Z0-9]{20,}'),       # OpenAI keys
-    re.compile(r'sk-ant-[a-zA-Z0-9-]{20,}'),   # Anthropic keys
-    re.compile(r'ghp_[a-zA-Z0-9]{36,}'),       # GitHub PATs
-    re.compile(r'gho_[a-zA-Z0-9]{36,}'),       # GitHub OAuth
-    re.compile(r'AIza[a-zA-Z0-9_-]{35}'),      # Google API keys
+    # key = value / key: value assignments in logs and config dumps.
+    # Value stops at whitespace or '&' so a single URL query param is redacted
+    # without swallowing the rest of the query string.
+    (re.compile(r'(?i)(api[_-]?key|apikey)\s*[:=]\s*[^\s&]+'), '[REDACTED]'),
+    (re.compile(r'(?i)(secret|password|passwd|pwd)\s*[:=]\s*[^\s&]+'), '[REDACTED]'),
+    (re.compile(r'(?i)(token|auth|bearer)\s*[:=]\s*[^\s&]+'), '[REDACTED]'),
+    (re.compile(r'(?i)(access[_-]?key|secret[_-]?key)\s*[:=]\s*[^\s&]+'), '[REDACTED]'),
+    # HTTP auth headers — value follows a space, not : / = (missed by the above)
+    (re.compile(r'(?i)authorization\s*:\s*\S+.*'), 'Authorization: [REDACTED]'),
+    (re.compile(r'(?i)\bbearer\s+[A-Za-z0-9._~+/=-]{10,}'), 'Bearer [REDACTED]'),
+    # Provider key formats (sk-ant before sk- so Anthropic keys match first)
+    (re.compile(r'sk-ant-[a-zA-Z0-9-]{20,}'), '[REDACTED]'),          # Anthropic
+    (re.compile(r'sk-[a-zA-Z0-9]{20,}'), '[REDACTED]'),              # OpenAI
+    (re.compile(r'sk_(?:live|test)_[A-Za-z0-9]{16,}'), '[REDACTED]'),  # Stripe
+    (re.compile(r'\b(?:AKIA|ASIA|AGPA|AIDA|AROA)[A-Z0-9]{16}\b'), '[REDACTED]'),  # AWS access key id
+    (re.compile(r'xox[baprs]-[A-Za-z0-9-]{10,}'), '[REDACTED]'),      # Slack
+    (re.compile(r'gh[oprsu]_[a-zA-Z0-9]{36,}'), '[REDACTED]'),        # GitHub classic PAT/OAuth
+    (re.compile(r'github_pat_[A-Za-z0-9_]{22,}'), '[REDACTED]'),      # GitHub fine-grained PAT
+    (re.compile(r'glpat-[A-Za-z0-9_-]{20,}'), '[REDACTED]'),          # GitLab PAT
+    (re.compile(r'AIza[a-zA-Z0-9_-]{35}'), '[REDACTED]'),            # Google API keys
+    (re.compile(r'\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}'), '[REDACTED]'),  # JWT
+    # PEM private key blocks (any type)
+    (re.compile(r'(?is)-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----.*?-----END [A-Z0-9 ]*PRIVATE KEY-----'),
+     '[REDACTED PRIVATE KEY]'),
+    # Credentials embedded in URLs: scheme://user:pass@host -> keep scheme + host
+    (re.compile(r'([a-zA-Z][a-zA-Z0-9+.\-]*://)[^\s:/@]+:[^\s:/@]+@'), r'\1[REDACTED]@'),
+    # Secret-bearing URL query params: ?token=...&sig=... -> keep the param name
+    (re.compile(r'(?i)([?&](?:api[_-]?key|apikey|access[_-]?token|token|key|secret|signature|sig|password)=)[^&\s]+'),
+     r'\1[REDACTED]'),
 ]
 
 
 def _redact_secrets(text):
-    """Strip common secret patterns from text."""
-    for pattern in _SECRET_PATTERNS:
-        text = pattern.sub('[REDACTED]', text)
+    """Strip common secret patterns from text before it leaves the machine."""
+    for pattern, replacement in _SECRET_PATTERNS:
+        text = pattern.sub(replacement, text)
     return text
 
 
