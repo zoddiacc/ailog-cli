@@ -16,6 +16,11 @@ from .display import Display, sanitize_terminal
 from .line_hints import get_hint
 from . import report
 
+# Android package names and adb serials — validated before they reach a
+# subprocess arg list (adb concatenates `adb shell` args into the device shell).
+_PACKAGE_RE = re.compile(r'^[A-Za-z][A-Za-z0-9_.]*$')
+_SERIAL_RE = re.compile(r'^[A-Za-z0-9_.:-]+$')
+
 
 class LogcatWrapper:
     def __init__(self, config, display: Display):
@@ -69,6 +74,9 @@ class LogcatWrapper:
 
         adb_cmd = ['adb']
         if args.device:
+            if not _SERIAL_RE.match(args.device):
+                self.display.error(f"Invalid device serial: {args.device!r}")
+                return 1
             adb_cmd += ['-s', args.device]
 
         # Detect multiple devices early
@@ -102,6 +110,17 @@ class LogcatWrapper:
         has_time_flag = any(a in logcat_args for a in ['-d', '-t', '-T'])
         if not has_time_flag:
             logcat_args = ['-T', '1'] + logcat_args
+
+        # Crash detection, stats, and coloring assume the threadtime column
+        # layout. Force it when the user didn't choose a format; warn if they did.
+        has_format_flag = any(a == '-v' or a.startswith('-v') for a in logcat_args)
+        if not has_format_flag:
+            logcat_args = ['-v', 'threadtime'] + logcat_args
+        elif self.explain_mode:
+            self.display.warning(
+                "Crash/explain detection assumes '-v threadtime'; a custom -v "
+                "format may reduce accuracy."
+            )
 
         cmd = adb_cmd + ['logcat'] + logcat_args
 
@@ -149,11 +168,12 @@ class LogcatWrapper:
             return 1
 
         # Start batch AI timer thread
+        self._timer_thread = None
         if not self.explain_mode:
-            timer_thread = threading.Thread(
+            self._timer_thread = threading.Thread(
                 target=self._batch_timer, args=(proc,), daemon=True
             )
-            timer_thread.start()
+            self._timer_thread.start()
 
         self._proc = proc
 
@@ -241,10 +261,12 @@ class LogcatWrapper:
                         # Continue collecting crash lines
                         self._crash_block_lines.append(line)
                     else:
-                        # Non-error line: crash block ended, flush repeats then summary
+                        # Non-error line: crash block ended, flush repeats then summary.
                         self._flush_repeat()
                         self._flush_crash_summary()
-                        if is_important and is_error_line:
+                        # An important warning that closed the block still deserves
+                        # an inline explanation (is_error_line is False here).
+                        if is_important:
                             self._explain_inline(line)
 
                 elif is_important and is_error_line:
@@ -255,6 +277,11 @@ class LogcatWrapper:
                     self._pending_for_ai.append(line)
 
         proc.wait()
+        # Stop the timer thread and wait for any in-flight AI box to finish
+        # printing before we render the session summary (avoids interleaving).
+        self._running = False
+        if self._timer_thread is not None:
+            self._timer_thread.join(timeout=self.batch_interval + 2)
         # Flush any pending repeat count
         self._flush_repeat()
         # Flush any pending crash block that didn't get a non-error line to close it
@@ -265,6 +292,9 @@ class LogcatWrapper:
 
     def _resolve_pid(self, adb_cmd, package):
         """Resolve a package name to a PID using adb shell pidof."""
+        if not _PACKAGE_RE.match(package):
+            self.display.error(f"Invalid package name: {package!r}")
+            return None
         try:
             result = subprocess.run(
                 adb_cmd + ['shell', 'pidof', package],
@@ -335,11 +365,7 @@ class LogcatWrapper:
                     'dalvik.', 'com.android.internal.'
                 ]):
                     meta['location'] = f'{file_name}:{line_num}'
-                    meta['method'] = full_class.split('$')[0].rsplit('.', 1)[-1] + '.' + full_class.split('.')[-1].replace('$', '.')
-                    # Try to get a cleaner method name
-                    parts = full_class.rsplit('.', 1)
-                    if len(parts) == 2:
-                        meta['method'] = full_class
+                    meta['method'] = full_class
                     break
             # Also check "Caused by" lines for deeper root cause
             m2 = re.search(r'Caused by:\s*([\w\.]+(?:Exception|Error)):\s*(.+)', line)
@@ -372,7 +398,7 @@ class LogcatWrapper:
     def _read_source_snippet(filepath, line_num, context=10):
         """Read ~2*context lines around the crash line from a source file."""
         try:
-            with open(filepath, 'r', errors='replace') as f:
+            with open(filepath, 'r', encoding='utf-8', errors='replace') as f:
                 lines = f.readlines()
         except (OSError, IOError):
             return None
@@ -407,7 +433,7 @@ class LogcatWrapper:
         # Extract metadata from the raw crash lines
         metadata = self._parse_crash_metadata(crash_lines)
 
-        if self._ai_calls >= self.max_ai_calls:
+        if not self._reserve_ai_call():
             # Still show metadata even without AI
             analysis = '(AI call limit reached — no analysis available)'
             self.display.crash_summary_box(metadata, analysis)
@@ -436,7 +462,6 @@ class LogcatWrapper:
                     exception_type=metadata.get('exception_type', ''),
                     source_snippet=source_snippet,
                 )
-            self._ai_calls += 1
             self.display.crash_summary_box(metadata, analysis)
             self._session_crashes.append((metadata, analysis))
             # Offer auto-fix if source file was found
@@ -447,12 +472,33 @@ class LogcatWrapper:
             self.display.crash_summary_box(metadata, analysis)
             self._session_crashes.append((metadata, analysis))
 
+    # Extensions we are willing to auto-fix. The crash location that decides
+    # which file to rewrite is parsed from attacker-influenceable log text, so
+    # we only ever write plausible source files, and only inside the project.
+    _FIXABLE_EXTS = {'.java', '.kt', '.kts', '.cpp', '.cc', '.cxx', '.c', '.h',
+                     '.hpp', '.aidl', '.py', '.rs', '.go', '.xml', '.gradle'}
+
+    def _is_safe_fix_target(self, src_path):
+        """True only if src_path is a plausible source file inside the CWD."""
+        _, ext = os.path.splitext(src_path)
+        if ext.lower() not in self._FIXABLE_EXTS:
+            self.display.dim(f'  Auto-fix skipped: {ext or "no extension"} is not a source file.')
+            return False
+        real = os.path.realpath(src_path)
+        cwd = os.path.realpath(os.getcwd())
+        if os.path.commonpath([real, cwd]) != cwd:
+            self.display.dim('  Auto-fix skipped: target is outside the project directory.')
+            return False
+        return True
+
     def _offer_auto_fix(self, metadata, analysis):
         """Prompt user to auto-fix source file based on crash analysis."""
         src_path = metadata.get('source_file')
         if not src_path:
             return
         if self._ai_calls >= self.max_ai_calls:
+            return
+        if not self._is_safe_fix_target(src_path):
             return
 
         filename = os.path.basename(src_path)
@@ -462,7 +508,7 @@ class LogcatWrapper:
 
         # Read the full source file
         try:
-            with open(src_path, 'r', errors='replace') as f:
+            with open(src_path, 'r', encoding='utf-8', errors='replace') as f:
                 original_content = f.read()
         except OSError as e:
             self.display.error(f'Could not read {src_path}: {e}')
@@ -473,6 +519,11 @@ class LogcatWrapper:
         loc_match = re.match(r'.+:(\d+)$', loc)
         crash_line = int(loc_match.group(1)) if loc_match else 0
 
+        # Reserve the AI call atomically right before spending it.
+        if not self._reserve_ai_call():
+            self.display.dim('  AI call limit reached — skipping fix.')
+            return
+
         # Call AI to generate fix
         try:
             with self.display.spinner_start(f'Generating fix for {filename}...'):
@@ -482,7 +533,6 @@ class LogcatWrapper:
                     analysis,
                     exception_type=metadata.get('exception_type', ''),
                 )
-            self._ai_calls += 1
         except RuntimeError as e:
             self.display.error(f'AI fix generation failed: {e}')
             return
@@ -517,7 +567,7 @@ class LogcatWrapper:
 
         # Write the fixed file
         try:
-            with open(src_path, 'w') as f:
+            with open(src_path, 'w', encoding='utf-8') as f:
                 f.write(fixed_content)
             self.display.success(f'Fix applied to {src_path}')
             self.display.dim(f'  Backup saved: {backup_path}')
@@ -532,17 +582,29 @@ class LogcatWrapper:
 
     def _explain_inline(self, line):
         """Explain a single error line inline (explain mode)."""
-        if self._ai_calls >= self.max_ai_calls:
+        if not self._reserve_ai_call():
             return
         context = list(self._context_buffer)
         try:
             explanation = self.ai.explain_line(line, context)
-            self._ai_calls += 1
-            indent = '    '
             for expl_line in explanation.split('\n'):
-                print(f"\033[2m{indent}💡 {sanitize_terminal(expl_line)}\033[0m")
+                # display.dim respects --no-color; don't hardcode ANSI here.
+                self.display.dim(f"    💡 {sanitize_terminal(expl_line)}")
         except RuntimeError:
             pass  # Silent fail for inline explanations
+
+    def _reserve_ai_call(self):
+        """Atomically reserve one AI call against the budget (thread-safe).
+
+        Returns True if a call was reserved, False if the budget is exhausted.
+        Both the timer thread and the main thread spend the budget, so the
+        check-and-increment must be atomic to avoid overshooting max_ai_calls.
+        """
+        with self._ai_lock:
+            if self._ai_calls >= self.max_ai_calls:
+                return False
+            self._ai_calls += 1
+            return True
 
     def _batch_timer(self, proc):
         """Background thread: trigger AI analysis every N seconds if there's activity."""
@@ -566,10 +628,11 @@ class LogcatWrapper:
 
     def _run_batch_ai(self, batch):
         """Run AI on a batch, display results."""
+        if not self._reserve_ai_call():
+            return
         self._ai_rendering.clear()
         try:
             analysis = self.ai.analyze_logcat_batch(batch, self.focus)
-            self._ai_calls += 1
             self.display.ai_box('Logcat Analysis', analysis, level='warning')
             self._session_ai_boxes.append(('Logcat Analysis', analysis))
         except RuntimeError as e:
@@ -647,13 +710,15 @@ class LogcatWrapper:
         html_content = report.generate_html_report(data)
 
         report_dir = self._REPORT_DIR
-        os.makedirs(report_dir, exist_ok=True)
+        # Reports embed crash excerpts and source snippets — keep them private.
+        os.makedirs(report_dir, mode=0o700, exist_ok=True)
 
         filename = now.strftime('ailog-report-%Y%m%d-%H%M%S.html')
         filepath = os.path.join(report_dir, filename)
 
         try:
-            with open(filepath, 'w') as f:
+            fd = os.open(filepath, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            with os.fdopen(fd, 'w', encoding='utf-8') as f:
                 f.write(html_content)
             self.display.info(f"HTML report saved: {filepath}")
             self._rotate_reports(report_dir)
