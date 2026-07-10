@@ -46,8 +46,46 @@ class TestFindMatches(unittest.TestCase):
         ids = [e.id for e in kp.find_matches(line)]
         self.assertIn('car-watchdog-kill', ids)
 
+    def test_car_not_connected_matches(self):
+        line = 'E CarClimate: android.car.CarNotConnectedException: not connected'
+        self.assertIn('car-not-connected', [e.id for e in kp.find_matches(line)])
+
+    def test_car_permission_denied_matches(self):
+        line = ('E CarService: Permission Denial: does not have '
+                'android.car.permission.CONTROL_CAR_CLIMATE')
+        self.assertIn('car-permission-denied', [e.id for e in kp.find_matches(line)])
+
+    def test_garage_mode_matches(self):
+        line = 'I CarPowerManagementService: Entering Garage Mode'
+        self.assertIn('garage-mode', [e.id for e in kp.find_matches(line)])
+
+    def test_car_evs_matches(self):
+        line = 'E CarEvsService: EVS camera stream failed to start'
+        self.assertIn('car-evs', [e.id for e in kp.find_matches(line)])
+
+    def test_car_user_switch_matches(self):
+        line = 'W CarUserService: switchUser timed out waiting for user HAL'
+        self.assertIn('car-user-switch', [e.id for e in kp.find_matches(line)])
+
+    def test_car_audio_zone_matches(self):
+        line = 'E CarAudioService: car_audio_configuration.xml: device address not found'
+        self.assertIn('car-audio-zone-config', [e.id for e in kp.find_matches(line)])
+
+    def test_vhal_permission_matches(self):
+        line = 'E VehicleHal: requires android.car.permission.CONTROL_CAR_ENERGY'
+        self.assertIn('vhal-permission', [e.id for e in kp.find_matches(line)])
+
     def test_no_match_on_plain_text(self):
         self.assertEqual(kp.find_matches('D ActivityManager: Displayed com.foo/.Main'), [])
+
+    def test_no_match_on_ordinary_automotive_free_lines(self):
+        # Guard against the new automotive regexes over-matching benign lines
+        for benign in [
+            'I ActivityManager: Start proc 1234:com.example/u0a10',
+            'D WifiService: Connected to network',
+            'V ViewRootImpl: draw finished',
+        ]:
+            self.assertEqual(kp.find_matches(benign), [], benign)
 
     def test_empty_input(self):
         self.assertEqual(kp.find_matches(''), [])

@@ -65,6 +65,34 @@ KNOWLEDGE = [
         'VehicleProperty definitions and that the vendor VHAL implements it; '
         'app code should query supported properties before using them.',
     ),
+    _entry(
+        'vhal-area-id', 'VHAL',
+        r'IllegalArgumentException.*area|(?:invalid|wrong|unknown)\s+area\s*id|areaId\s+\S+\s+(?:not|is not)\s+(?:supported|valid)',
+        'Wrong VHAL areaId for the property',
+        'A VHAL access used an areaId the property does not define. Zoned '
+        'properties (per-seat, per-door, per-window) only accept the area IDs '
+        'listed in their VehicleAreaConfig; global properties must use areaId 0. '
+        'Read the property\'s areaConfigs and pass a matching area, not a guessed bitmask.',
+    ),
+    _entry(
+        'vhal-permission', 'VHAL',
+        r'(?:SecurityException|permission).*(?:android\.car\.permission|Car\.PERMISSION)|requires?\s+.*android\.car\.permission',
+        'VHAL/Car property needs a specific car permission',
+        'Reading/writing this property requires a dedicated car permission (e.g. '
+        'android.car.permission.CONTROL_CAR_CLIMATE). Many are signature|privileged, '
+        'so the app must be a privileged/preinstalled app AND allowlisted in a '
+        'permissions XML — a normal runtime grant is not enough. Vendor properties '
+        'need the matching VENDOR permission mapped in the VHAL.',
+    ),
+    _entry(
+        'vhal-subscribe-rate', 'VHAL',
+        r'subscribe.*(?:rate|sample).*(?:invalid|out of range|too high)|(?:max|min)SampleRate',
+        'VHAL subscribe sample rate out of the property\'s allowed range',
+        'A continuous VHAL property can only be subscribed between its minSampleRate '
+        'and maxSampleRate (from its config); an out-of-range rate is rejected. On-'
+        'change properties cannot be sampled at a rate at all — subscribe with '
+        'onChange semantics instead of a fixed Hz.',
+    ),
 
     # ---------------- Android Automotive: Car framework ----------------
     _entry(
@@ -94,6 +122,143 @@ KNOWLEDGE = [
         'rejected, a missing/misconfigured audio zone, or audioserver having died '
         '(which restarts and drops active tracks). Check the car_audio_configuration '
         'XML and the focus request outcome.',
+    ),
+    _entry(
+        'car-audio-zone-config', 'CarAudio',
+        r'car_audio_configuration|CarAudioZone|audio\s+zone\s+\d|no\s+context.*audio',
+        'Car audio zone / configuration problem',
+        'Automotive audio routing is defined in car_audio_configuration.xml, which '
+        'maps each audio zone to physical output devices and assigns each audio '
+        'context (MUSIC, NAVIGATION, VOICE_COMMAND, etc.) to a volume group. A '
+        'malformed or mismatched config — a device address that does not exist, a '
+        'context with no group — makes zones fail to initialize. Validate the XML '
+        'against the actual audio_policy device addresses.',
+    ),
+    _entry(
+        'audiocontrol-hal', 'CarAudio',
+        r'IAudioControl|audiocontrol.*(?:HAL|hal)|AudioControl.*(?:died|fail|error)',
+        'AudioControl HAL error (ducking/gain/routing)',
+        'The AudioControl HAL (android.hardware.automotive.audiocontrol) implements '
+        'OEM audio ducking, gain, and mute callbacks for CarAudioService. If it dies '
+        'or returns errors, focus-based ducking and hardware gain changes stop '
+        'working. Check the vendor audiocontrol HAL service and its selinux domain.',
+    ),
+
+    # ---------------- Android Automotive: Car API connection & permissions ----------------
+    _entry(
+        'car-not-connected', 'Car API',
+        r'CarNotConnectedException|Car\s+not\s+connected|IllegalStateException.*Car.*not\s+connected',
+        'Car API used while not connected to CarService',
+        'A Car*Manager was used before Car connected, or after CarService died and '
+        'the Car object disconnected. Create Car with Car.createCar() using a '
+        'CarServiceLifecycleListener (or check Car.isConnected()), and re-acquire '
+        'managers on reconnect — a cached manager becomes stale once CarService '
+        'restarts.',
+    ),
+    _entry(
+        'car-permission-denied', 'Car API',
+        r'(?:SecurityException|Permission Denial).*(?:android\.car\.permission|CarService)|does not have.*android\.car\.permission',
+        'Car permission denied — likely a privileged/allowlist gap',
+        'The caller lacks a required android.car.permission. Most car permissions are '
+        'protectionLevel signature|privileged, so the app must be installed as a '
+        'privileged app (priv-app) AND listed in a privileged-permission allowlist '
+        'XML under etc/permissions; otherwise the grant is denied even after '
+        'requesting it. Confirm the app\'s install location and allowlist entry.',
+    ),
+
+    # ---------------- Android Automotive: power management ----------------
+    _entry(
+        'car-power-state', 'CarPower',
+        r'AP_POWER_STATE|CarPowerManagement|\bCPMS\b|PowerState.*(?:SHUTDOWN_PREPARE|WAIT_FOR_VHAL|SUSPEND|ON)',
+        'Car power state transition (CPMS ↔ VHAL)',
+        'CarPowerManagementService drives power state via the VHAL AP_POWER_STATE_REQ '
+        '(vehicle→Android request) and AP_POWER_STATE_REPORT (Android→vehicle ack) '
+        'properties. Stuck transitions are usually a component not finishing its '
+        'power-state callback in time, or the VHAL not sending the expected request; '
+        'trace which listener has not reported completion.',
+    ),
+    _entry(
+        'garage-mode', 'CarPower',
+        r'[Gg]arage\s*[Mm]ode',
+        'Garage Mode — background maintenance window during shutdown/suspend',
+        'Garage Mode is the window entered during SHUTDOWN_PREPARE where the system '
+        'runs deferred background jobs (updates, uploads) before fully powering off '
+        'or suspending. If it hangs, shutdown is blocked: look for a long-running '
+        'JobScheduler job that never completes or a component not acknowledging the '
+        'power-state change.',
+    ),
+    _entry(
+        'suspend-str', 'CarPower',
+        r'[Ss]uspend[- ]to[- ]RAM|deep\s+sleep|SystemSuspend|enterDeepSleep|failed to (?:enter )?suspend',
+        'Suspend-to-RAM / deep sleep issue',
+        'AAOS commonly suspends to RAM (deep sleep) rather than shutting down. A '
+        'failure to suspend is usually a held wakelock or a driver blocking the '
+        'suspend path; a failure to resume points at a wakeup-source or VHAL '
+        'resume-signal problem. Check /sys/power/wakeup_sources and which wakelock '
+        'is active at suspend time.',
+    ),
+
+    # ---------------- Android Automotive: users, input, displays ----------------
+    _entry(
+        'car-user-switch', 'CarUser',
+        r'CarUserService|user\s+HAL|InitialUserSetting|switchUser|headless\s+system\s+user',
+        'Car user management / switching issue',
+        'AAOS boots headless: the system user (user 0) runs no UI, and a real driver '
+        'user is created/switched into. User switches are coordinated with the user '
+        'HAL (INITIAL_USER_INFO / SWITCH_USER). Failures ("no foreground user", '
+        'switch timeout) usually mean the user HAL did not respond or a blocking '
+        'user-lifecycle listener stalled the switch.',
+    ),
+    _entry(
+        'car-input-rotary', 'CarInput',
+        r'CarInputService|RotaryService|\brotary\b',
+        'Car input / rotary controller issue',
+        'Rotary and hardware-key input in AAOS flows through CarInputService and '
+        '(for rotary) RotaryService, which moves focus between focusable views. '
+        'Problems are usually focus getting lost (no FocusArea/FocusParkingView in '
+        'the layout, from car-ui-lib) or key events not mapped to the intended '
+        'CarInputManager target.',
+    ),
+    _entry(
+        'car-cluster', 'CarCluster',
+        r'InstrumentCluster|ClusterHomeService|ClusterRenderingService|ClusterOsDoubleService',
+        'Instrument cluster display/service issue',
+        'The instrument cluster (speed/RPM/nav behind the wheel) is driven by the '
+        'cluster services (ClusterHomeService / InstrumentClusterRenderingService). '
+        'Blank or frozen clusters are usually the cluster display not registered, '
+        'the cluster activity failing to launch on its display, or navigation state '
+        'not being forwarded from the nav app.',
+    ),
+    _entry(
+        'car-evs', 'CarEVS',
+        r'CarEvsService|\bEVS\b|evs.*(?:camera|stream|buffer)|rearview\s+camera',
+        'EVS (rearview / surround camera) issue',
+        'EVS (Exterior View System) shows the rearview/surround camera, and must '
+        'appear within ~2s of reverse gear — often before Android is fully booted — '
+        'via the EVS HAL, EVS manager, and CarEvsService. Failures are usually the '
+        'camera stream not starting, buffer starvation, or the EVS HAL not being '
+        'brought up early enough in init.',
+    ),
+
+    # ---------------- Android Automotive: services ----------------
+    _entry(
+        'car-telemetry', 'CarTelemetry',
+        r'CarTelemetry',
+        'CarTelemetryService issue',
+        'CarTelemetryService collects on-device metrics by running MetricsConfig '
+        'scripts against published data (VHAL, connectivity, memory). Errors are '
+        'usually a malformed MetricsConfig, a script referencing an unavailable '
+        'publisher, or results not being pulled before they expire.',
+    ),
+    _entry(
+        'car-vms', 'VMS',
+        r'\bVMS\b|VmsClientManager|VmsSubscriberManager|Vehicle Map Service',
+        'Vehicle Map Service (VMS) messaging issue',
+        'VMS is a publish/subscribe layer (over a VHAL property) for sharing map/ADAS '
+        'layers between apps and the platform. Failures are usually a publisher/'
+        'subscriber layer/version mismatch or a client not registered before '
+        'publishing; check the layer availability and that both sides agree on the '
+        'layer ID and version.',
     ),
 
     # ---------------- SELinux ----------------
