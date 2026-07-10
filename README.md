@@ -274,11 +274,19 @@ and diagnostics — and it's pure data, so it grows without code changes.
 python3 -m unittest discover -s tests -v
 ```
 
+## Contributing
+
+Contributions are welcome — especially new **knowledge-pack entries** (VHAL
+properties, SELinux/CarService/build error signatures), which are pure data and a
+great first PR. See **[CONTRIBUTING.md](CONTRIBUTING.md)** for the dev setup and
+workflow, and **[SECURITY.md](SECURITY.md)** to report vulnerabilities privately.
+
 ## Further Reading
 
 - **[TESTING.md](TESTING.md)** — Step-by-step guide to test AILog with a real Android app
 - **[UNINSTALL.md](UNINSTALL.md)** — How to completely remove AILog
 - **[ARCHITECTURE.md](ARCHITECTURE.md)** — Technical architecture and design decisions
+- **[CONTRIBUTING.md](CONTRIBUTING.md)** — How to contribute
 - **[CHANGELOG.md](CHANGELOG.md)** — Version history
 
 ## License

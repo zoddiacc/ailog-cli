@@ -1,0 +1,56 @@
+name: Bug report
+description: Report something that isn't working
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug! For **security vulnerabilities**, please do not
+        file a public issue — see [SECURITY.md](../blob/master/SECURITY.md).
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you do, and what went wrong?
+      placeholder: Running `ailog bugreport br.zip` crashes with ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect?
+    validations:
+      required: false
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: The exact command(s) and, if possible, a minimal sample log/bugreport.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: AILog version
+      description: "Output of `ailog --version`"
+      placeholder: "ailog 2.1.1"
+    validations:
+      required: true
+  - type: dropdown
+    id: provider
+    attributes:
+      label: AI provider
+      options:
+        - Ollama (local)
+        - OpenAI-compatible
+        - Anthropic
+        - Not applicable / --no-ai
+    validations:
+      required: false
+  - type: input
+    id: env
+    attributes:
+      label: OS and Python version
+      placeholder: "macOS 14 / Python 3.12"
+    validations:
+      required: false

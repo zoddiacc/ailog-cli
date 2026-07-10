@@ -1,0 +1,31 @@
+name: Feature request or knowledge-pack suggestion
+description: Suggest a feature, or an AOSP/Automotive error the tool should recognize
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem would this solve?
+      description: The use case or the log/error AILog doesn't handle well today.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: |
+        What should AILog do? For a knowledge-pack suggestion, paste a sample log
+        line and what the tool should explain about it.
+    validations:
+      required: false
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Kind of request
+      options:
+        - New CLI feature
+        - Knowledge-pack entry (VHAL / SELinux / CarService / build / ...)
+        - Improvement to an existing command
+        - Other
+    validations:
+      required: true
