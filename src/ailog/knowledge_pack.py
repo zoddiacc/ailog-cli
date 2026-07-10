@@ -597,6 +597,137 @@ VHAL_PROPERTIES = {
     'DISPLAY_BRIGHTNESS': ('main display brightness',
         'DISPLAY_BRIGHTNESS is the vehicle-controlled brightness of the main display '
         '(used to sync Android brightness with the car). Platform property.'),
+    'PER_DISPLAY_BRIGHTNESS': ('per-display brightness (multi-display)',
+        'PER_DISPLAY_BRIGHTNESS carries brightness for a specific display on '
+        'multi-display head units (IVI, cluster, passenger). Platform property.'),
+
+    # --- HVAC extras (Car.PERMISSION_CONTROL_CAR_CLIMATE) ---
+    'HVAC_RECIRC_ON': ('air recirculation on (bool)',
+        'HVAC_RECIRC_ON toggles cabin air recirculation. Read/write, requires '
+        'Car.PERMISSION_CONTROL_CAR_CLIMATE.'),
+    'HVAC_DUAL_ON': ('dual-zone temperature linking (bool)',
+        'HVAC_DUAL_ON links/unlinks driver and passenger temperature zones. '
+        'Read/write, requires Car.PERMISSION_CONTROL_CAR_CLIMATE.'),
+    'HVAC_SEAT_TEMPERATURE': ('seat heating/cooling level per seat',
+        'HVAC_SEAT_TEMPERATURE is the seat heater (positive) / cooler (negative) '
+        'level for a seat area. Zoned read/write, Car.PERMISSION_CONTROL_CAR_SEATS.'),
+    'HVAC_STEERING_WHEEL_HEAT': ('steering-wheel heater level',
+        'HVAC_STEERING_WHEEL_HEAT sets the steering-wheel heater level. Read/write, '
+        'requires Car.PERMISSION_CONTROL_CAR_CLIMATE.'),
+
+    # --- EV charging extras ---
+    'EV_CHARGE_TIME_REMAINING': ('seconds until fully charged',
+        'EV_CHARGE_TIME_REMAINING is the estimated seconds until charging completes '
+        '(0 when not charging). Read-only, requires Car.PERMISSION_ENERGY.'),
+
+    # --- Vehicle info extras (Car.PERMISSION_CAR_INFO, static) ---
+    'INFO_MODEL_YEAR': ('model year (static)',
+        'INFO_MODEL_YEAR is the model year. Static/read-only, Car.PERMISSION_CAR_INFO.'),
+    'INFO_FUEL_CAPACITY': ('max fuel capacity (mL, static)',
+        'INFO_FUEL_CAPACITY is the tank capacity in milliliters. Static/read-only, '
+        'Car.PERMISSION_CAR_INFO.'),
+    'INFO_EV_BATTERY_CAPACITY': ('nominal EV battery capacity (Wh, static)',
+        'INFO_EV_BATTERY_CAPACITY is the nominal usable battery capacity in Watt-'
+        'hours. Static/read-only, Car.PERMISSION_CAR_INFO.'),
+
+    # --- Body extras ---
+    'SEAT_OCCUPANCY': ('seat occupancy (occupied/vacant/unknown)',
+        'SEAT_OCCUPANCY reports whether a seat is occupied. Zoned read-only, requires '
+        'Car.PERMISSION_CONTROL_CAR_SEATS.'),
+
+    # --- Exterior lights (Car.PERMISSION_EXTERIOR_LIGHTS, read) ---
+    'HIGH_BEAM_LIGHTS_STATE': ('high-beam state',
+        'HIGH_BEAM_LIGHTS_STATE reports the high-beam state. Read-only, requires '
+        'Car.PERMISSION_EXTERIOR_LIGHTS; the *_SWITCH write needs '
+        'Car.PERMISSION_CONTROL_EXTERIOR_LIGHTS.'),
+    'FOG_LIGHTS_STATE': ('fog light state',
+        'FOG_LIGHTS_STATE reports the fog-light state. Read-only, requires '
+        'Car.PERMISSION_EXTERIOR_LIGHTS.'),
+    'HAZARD_LIGHTS_STATE': ('hazard light state',
+        'HAZARD_LIGHTS_STATE reports the hazard-light state. Read-only, requires '
+        'Car.PERMISSION_EXTERIOR_LIGHTS.'),
+
+    # --- Diagnostics (Car.PERMISSION_CAR_DIAGNOSTIC_READ_ALL) ---
+    'OBD2_LIVE_FRAME': ('live OBD2 sensor snapshot',
+        'OBD2_LIVE_FRAME is a snapshot of current OBD2 sensor values. Read-only, '
+        'requires Car.PERMISSION_CAR_DIAGNOSTIC_READ_ALL.'),
+    'OBD2_FREEZE_FRAME': ('OBD2 freeze frame captured at a fault',
+        'OBD2_FREEZE_FRAME is the sensor snapshot the ECU stored when a diagnostic '
+        'trouble code was set. Read-only, Car.PERMISSION_CAR_DIAGNOSTIC_READ_ALL.'),
+
+    # --- Time ---
+    'ANDROID_EPOCH_TIME': ('external time source to set Android clock',
+        'ANDROID_EPOCH_TIME (formerly EPOCH_TIME) lets the car provide an external '
+        'time source to set the Android clock. Write requires '
+        'Car.PERMISSION_CAR_EPOCH_TIME.'),
+
+    # --- Power management / policy (system/HAL, used by CarPowerManagementService) ---
+    'AP_POWER_STATE_REQ': ('vehicle→Android power-state request',
+        'AP_POWER_STATE_REQ is how the vehicle asks Android to change power state '
+        '(ON, SHUTDOWN_PREPARE, CANCEL_SHUTDOWN, FINISHED). System property read by '
+        'CarPowerManagementService; a stuck transition often starts here.'),
+    'AP_POWER_STATE_REPORT': ('Android→vehicle power-state report',
+        'AP_POWER_STATE_REPORT is Android acknowledging power-state handling '
+        '(WAIT_FOR_VHAL, DEEP_SLEEP_ENTRY, SHUTDOWN_START, etc.). System property '
+        'written by CarPowerManagementService.'),
+    'AP_POWER_BOOTUP_REASON': ('why the head unit booted',
+        'AP_POWER_BOOTUP_REASON reports why the unit powered on (user power-on, '
+        'system boot, timer/remote). Read at boot. System property.'),
+    'POWER_POLICY_REQ': ('request to apply a power policy',
+        'POWER_POLICY_REQ requests a power policy that enables/disables components '
+        '(audio, display, Bluetooth, etc.) for the current state. System property; '
+        'CarPowerManagementService applies it.'),
+    'CURRENT_POWER_POLICY': ('currently applied power policy',
+        'CURRENT_POWER_POLICY is the power policy in effect now. System property; '
+        'useful when a component is unexpectedly powered off during a state change.'),
+    'VEHICLE_IN_USE': ('whether the vehicle is currently in use',
+        'VEHICLE_IN_USE indicates the vehicle is in active use, which gates boot/'
+        'power decisions (e.g. staying awake). System property.'),
+
+    # --- User HAL (system, used by CarUserService) ---
+    'INITIAL_USER_INFO': ('boot-time user-selection exchange',
+        'INITIAL_USER_INFO is the user-HAL exchange at boot that decides which user '
+        'to switch into on a headless system. System property; a stalled response '
+        'shows up as a slow/failed initial user switch.'),
+    'SWITCH_USER': ('user-switch request/response with the user HAL',
+        'SWITCH_USER coordinates switching the foreground user with the vehicle\'s '
+        'user HAL. System property; switch timeouts often trace to no HAL response.'),
+    'CREATE_USER': ('notify the user HAL a user was created',
+        'CREATE_USER tells the user HAL that Android created a user, so the vehicle '
+        'can associate it. System property.'),
+    'USER_IDENTIFICATION_ASSOCIATION': ('associate a user with vehicle identification',
+        'USER_IDENTIFICATION_ASSOCIATION links an Android user to vehicle-side '
+        'identification (e.g. a key fob). System property.'),
+
+    # --- CarWatchdog / VHAL liveness (system) ---
+    'VHAL_HEARTBEAT': ('VHAL liveness heartbeat',
+        'VHAL_HEARTBEAT is a periodic signal the VHAL emits so CarWatchdog knows it '
+        'is alive; a stopped heartbeat means a stuck or dead VHAL and triggers '
+        'recovery. System property.'),
+    'WATCHDOG_ALIVE': ('CarWatchdog VHAL liveness check',
+        'WATCHDOG_ALIVE is used by CarWatchdog to verify the VHAL is responsive. '
+        'System property.'),
+    'WATCHDOG_TERMINATED_PROCESS': ('report a CarWatchdog-killed process to VHAL',
+        'WATCHDOG_TERMINATED_PROCESS informs the VHAL which process CarWatchdog '
+        'terminated (for vendor telemetry). System property.'),
+
+    # --- Instrument cluster (system/OEM) ---
+    'CLUSTER_NAVIGATION_STATE': ('navigation maneuvers pushed to the cluster',
+        'CLUSTER_NAVIGATION_STATE carries turn-by-turn navigation state to the '
+        'instrument cluster. System/OEM property; missing cluster nav usually means '
+        'the nav app is not publishing it or the cluster is not subscribed.'),
+    'CLUSTER_SWITCH_UI': ('request the cluster to switch shown UI',
+        'CLUSTER_SWITCH_UI requests the cluster change which UI/app it displays. '
+        'System/OEM property.'),
+    'CLUSTER_DISPLAY_STATE': ('cluster display on/off/bounds state',
+        'CLUSTER_DISPLAY_STATE is the cluster display\'s power/bounds/inset state. '
+        'System/OEM property.'),
+
+    # --- EVS ---
+    'EVS_SERVICE_REQUEST': ('request to start/stop an EVS service',
+        'EVS_SERVICE_REQUEST triggers starting/stopping an EVS service such as the '
+        'rearview camera. System property; used to bring the camera up quickly, '
+        'often before Android is fully booted.'),
 }
 
 # One combined regex over all property names (longest-first so e.g.
