@@ -3,6 +3,16 @@
 All notable changes are documented here. This project follows
 [Keep a Changelog](https://keepachangelog.com/) conventions.
 
+## 2.1.1 — 2026-07-10
+
+### Changed
+- Renamed the from-source launcher `ailog.py` → `run.py` so it no longer shadows
+  the `ailog` package when importing from the repo root; `install.sh` updated to
+  match. No change to the installed package (the launcher is not part of the
+  wheel/sdist) — `pip` users are unaffected.
+- Release workflow reads the package version from installed dist metadata
+  (robust regardless of working directory).
+
 ## 2.1.0 — 2026-07-10
 
 A large feature + hardening release, and a repositioning around AOSP / Android
