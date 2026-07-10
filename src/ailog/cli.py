@@ -38,8 +38,10 @@ def main():
                         help='Show what AI call would be made without sending it')
     parser.add_argument('--show-tokens', action='store_true',
                         help='Show estimated token count for AI calls')
-    parser.add_argument('--redact', action='store_true',
-                        help='Strip API keys, passwords, and tokens from log content before sending to AI')
+    parser.add_argument('--redact', dest='redact', action='store_true', default=None,
+                        help='Force secret redaction on (default: on for cloud providers, off for local Ollama)')
+    parser.add_argument('--no-redact', dest='redact', action='store_false',
+                        help='Disable secret redaction before sending log content to AI')
 
     subparsers = parser.add_subparsers(dest='command', help='Command')
 

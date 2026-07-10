@@ -12,7 +12,7 @@ from collections import deque
 from datetime import datetime
 from .ai_client import AIClient
 from .noise_filter import NoiseFilter
-from .display import Display
+from .display import Display, sanitize_terminal
 from .line_hints import get_hint
 from . import report
 
@@ -116,6 +116,11 @@ class LogcatWrapper:
 
         # Ask for source-reading consent upfront (only in explain mode, only if not --no-source)
         if self.explain_mode and self._source_consent is None:
+            if self.config.provider != 'ollama':
+                self.display.warning(
+                    f"Source file contents will be sent to {self.config.provider} "
+                    f"(a remote provider). Secrets are redacted first unless --no-redact."
+                )
             self._source_consent = self.display.prompt_yes_no(
                 'Read source files from this project to suggest precise code fixes?'
             )
@@ -535,7 +540,7 @@ class LogcatWrapper:
             self._ai_calls += 1
             indent = '    '
             for expl_line in explanation.split('\n'):
-                print(f"\033[2m{indent}💡 {expl_line}\033[0m")
+                print(f"\033[2m{indent}💡 {sanitize_terminal(expl_line)}\033[0m")
         except RuntimeError:
             pass  # Silent fail for inline explanations
 

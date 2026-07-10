@@ -2,11 +2,27 @@
 Terminal display utilities with ANSI colors and formatting.
 """
 
+import re
 import sys
 import shutil
 import time
 import threading
 import unicodedata
+
+
+# Control characters that let untrusted text drive the terminal: C0 (except
+# tab 0x09 and newline 0x0a), DEL, and C1. Stripping these — ESC (0x1b) most
+# importantly — neutralizes escape-sequence injection (cursor moves, screen
+# clears, window-title/OSC-52 clipboard writes) from attacker-controlled log
+# lines and AI output.
+_TERM_CTRL_RE = re.compile(r'[\x00-\x08\x0b-\x1f\x7f\x80-\x9f]')
+
+
+def sanitize_terminal(text):
+    """Strip terminal control/escape characters from untrusted text."""
+    if not text:
+        return text
+    return _TERM_CTRL_RE.sub('', str(text))
 
 
 # ANSI color codes
@@ -88,6 +104,8 @@ class Display:
 
     def ai_box(self, title, content, level='info'):
         """Render a boxed AI interpretation block."""
+        title = sanitize_terminal(title)
+        content = sanitize_terminal(content)
         colors = {
             'info':    (Colors.BRIGHT_CYAN,   '🤖'),
             'warning': (Colors.BRIGHT_YELLOW, '⚠️ '),
@@ -131,6 +149,10 @@ class Display:
 
     def crash_summary_box(self, metadata, ai_analysis):
         """Render a crash summary with extracted metadata and AI analysis."""
+        # Both metadata (parsed from the log) and ai_analysis are attacker-influenced.
+        metadata = {k: (sanitize_terminal(v) if isinstance(v, str) else v)
+                    for k, v in metadata.items()}
+        ai_analysis = sanitize_terminal(ai_analysis)
         width = min(self.term_width, 100)
         iw = width - 7  # inner content width (1 border + 3 left + content + 2 right + 1 border)
 
@@ -255,6 +277,7 @@ class Display:
 
     def log_line(self, line, level=None):
         """Print a log line with appropriate coloring."""
+        line = sanitize_terminal(line)
         if level == 'error' or any(k in line for k in ['ERROR', 'FAILED', 'fatal error', 'error:']):
             print(self._fmt(line, Colors.BRIGHT_RED))
         elif level == 'warning' or any(k in line for k in ['WARNING', 'warning:', 'WARN']):
@@ -268,6 +291,7 @@ class Display:
 
     def filtered_line(self, line, tag=None):
         """Print a logcat line."""
+        line = sanitize_terminal(line)
         if ' E ' in line or line.startswith('E/'):
             print(self._fmt(line, Colors.BRIGHT_RED))
         elif ' W ' in line or line.startswith('W/'):
@@ -307,6 +331,7 @@ class Display:
 
     def hint(self, text):
         """Print a human-readable hint below a log line."""
+        text = sanitize_terminal(text)
         print(self._fmt(f'    ↳ {text}', Colors.DIM, Colors.BRIGHT_GREEN))
 
     def show_diff(self, old_lines, new_lines):

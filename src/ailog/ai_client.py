@@ -103,7 +103,11 @@ class AIClient:
         self.timeout = config.get('timeout', 30)
         self.dry_run = getattr(config, 'dry_run', False)
         self.show_tokens = getattr(config, 'show_tokens', False)
-        self.redact = getattr(config, 'redact', False)
+        # Redaction defaults ON for remote providers (log content and whole
+        # source files leave the machine) and OFF for local Ollama. An explicit
+        # --redact / --no-redact (True/False) overrides; None means "use default".
+        redact_pref = getattr(config, 'redact', None)
+        self.redact = (self.provider != 'ollama') if redact_pref is None else redact_pref
         self._system_prompt = config.get('system_prompt', '') or SYSTEM_PROMPT
 
     @staticmethod

@@ -4,8 +4,9 @@ import os
 import unittest
 import tempfile
 from unittest.mock import patch
-from src.ailog.ai_client import _redact_secrets
+from src.ailog.ai_client import _redact_secrets, AIClient
 from src.ailog.config_manager import ConfigManager
+from src.ailog.display import sanitize_terminal
 
 
 class TestRedactSecrets(unittest.TestCase):
@@ -50,6 +51,63 @@ class TestRedactSecrets(unittest.TestCase):
         text = "key " + fake_key
         result = _redact_secrets(text)
         self.assertNotIn('AIzaSy', result)
+
+
+class TestSanitizeTerminal(unittest.TestCase):
+    """Untrusted log/AI text must not carry terminal escape sequences."""
+
+    def test_strips_escape_sequences(self):
+        # Screen-clear + window-title injection from a malicious log line
+        payload = "normal\x1b[2J\x1b]0;OWNED\x07text"
+        result = sanitize_terminal(payload)
+        self.assertNotIn('\x1b', result)
+        self.assertNotIn('\x07', result)
+        self.assertEqual(result, "normal[2J]0;OWNEDtext")
+
+    def test_strips_c1_and_del(self):
+        self.assertNotIn('\x9b', sanitize_terminal("a\x9bb"))
+        self.assertNotIn('\x7f', sanitize_terminal("a\x7fb"))
+
+    def test_preserves_tab_and_newline(self):
+        self.assertEqual(sanitize_terminal("a\tb\nc"), "a\tb\nc")
+
+    def test_plain_text_unchanged(self):
+        text = "E AndroidRuntime: java.lang.NullPointerException"
+        self.assertEqual(sanitize_terminal(text), text)
+
+
+class _RedactConfig:
+    """Minimal config to exercise AIClient redaction resolution."""
+    def __init__(self, provider, redact=None):
+        self.provider = provider
+        self.redact = redact
+
+    def get_api_key(self):
+        return 'x'
+
+    def get_model(self):
+        return 'm'
+
+    def get_base_url(self):
+        return 'http://localhost:11434'
+
+    def get(self, key, default=None):
+        return default
+
+
+class TestRedactionDefaults(unittest.TestCase):
+    """Redaction must default ON for remote providers, OFF for local Ollama."""
+
+    def test_default_on_for_cloud(self):
+        self.assertTrue(AIClient(_RedactConfig('openai')).redact)
+        self.assertTrue(AIClient(_RedactConfig('anthropic')).redact)
+
+    def test_default_off_for_ollama(self):
+        self.assertFalse(AIClient(_RedactConfig('ollama')).redact)
+
+    def test_explicit_override_wins(self):
+        self.assertFalse(AIClient(_RedactConfig('openai', redact=False)).redact)
+        self.assertTrue(AIClient(_RedactConfig('ollama', redact=True)).redact)
 
 
 class TestConfigFilePermissions(unittest.TestCase):
