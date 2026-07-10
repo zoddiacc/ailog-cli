@@ -405,19 +405,254 @@ for _e in KNOWLEDGE:
 del _SEEN_IDS
 
 
-def find_matches(text, limit=4):
-    """Return knowledge entries whose signature matches `text`.
+# ---------------------------------------------------------------------------
+# VHAL property reference table.
+#
+# Keyed by VehicleProperty name (as it appears in logs). Values are
+# (short_summary, full_guidance). Kept as a table rather than one regex per
+# property so it scales to hundreds of entries with a single combined match.
+# Facts come from the stable public VehicleProperty / VehiclePropertyIds API;
+# tools/gen_vhal_knowledge.py regenerates/extends this from an AOSP tree.
+# ---------------------------------------------------------------------------
+VHAL_PROPERTIES = {
+    # --- Powertrain (Car.PERMISSION_POWERTRAIN, read) ---
+    'GEAR_SELECTION': ('gear the driver selected (P/R/N/D/manual)',
+        'GEAR_SELECTION is the gear the driver selected (P/R/N/D or a manual gear). '
+        'Read-only, requires Car.PERMISSION_POWERTRAIN. Use CURRENT_GEAR for the gear '
+        'actually engaged, which can differ during shifts.'),
+    'CURRENT_GEAR': ('gear currently engaged by the transmission',
+        'CURRENT_GEAR is the gear the transmission has actually engaged (vs the '
+        'driver-selected GEAR_SELECTION). Read-only, requires Car.PERMISSION_POWERTRAIN.'),
+    'PARKING_BRAKE_ON': ('parking brake engaged (bool)',
+        'PARKING_BRAKE_ON is true when the parking brake is engaged. Read-only, '
+        'requires Car.PERMISSION_POWERTRAIN.'),
+    'IGNITION_STATE': ('ignition position (LOCK/OFF/ACC/ON/START)',
+        'IGNITION_STATE reports the ignition switch position: UNDEFINED, LOCK, OFF, '
+        'ACC, ON, or START. Read-only, requires Car.PERMISSION_POWERTRAIN.'),
 
-    Preserves pack order (most-specific first), dedups by id, caps at `limit`.
+    # --- Speed / motion ---
+    'PERF_VEHICLE_SPEED': ('vehicle speed in m/s',
+        'PERF_VEHICLE_SPEED is the vehicle speed in meters/second (negative when '
+        'moving in reverse). Read-only, requires Car.PERMISSION_SPEED.'),
+    'PERF_VEHICLE_SPEED_DISPLAY': ('speed shown on the cluster',
+        'PERF_VEHICLE_SPEED_DISPLAY is the speed shown to the driver, which may '
+        'intentionally differ from PERF_VEHICLE_SPEED. Read-only, Car.PERMISSION_SPEED.'),
+    'PERF_ODOMETER': ('total distance traveled (meters)',
+        'PERF_ODOMETER is the odometer reading in meters. Read-only, requires '
+        'Car.PERMISSION_MILEAGE.'),
+    'PERF_STEERING_ANGLE': ('front wheel steering angle (degrees)',
+        'PERF_STEERING_ANGLE is the front-wheel angle in degrees (left negative). '
+        'Read-only, requires Car.PERMISSION_READ_STEERING_STATE.'),
+
+    # --- Engine (Car.PERMISSION_CAR_ENGINE_DETAILED, read) ---
+    'ENGINE_RPM': ('engine speed (RPM)',
+        'ENGINE_RPM is engine revolutions per minute. Read-only, requires '
+        'Car.PERMISSION_CAR_ENGINE_DETAILED.'),
+    'ENGINE_OIL_TEMP': ('engine oil temperature (°C)',
+        'ENGINE_OIL_TEMP is engine oil temperature in Celsius. Read-only, requires '
+        'Car.PERMISSION_CAR_ENGINE_DETAILED.'),
+    'ENGINE_COOLANT_TEMP': ('engine coolant temperature (°C)',
+        'ENGINE_COOLANT_TEMP is coolant temperature in Celsius. Read-only, requires '
+        'Car.PERMISSION_CAR_ENGINE_DETAILED.'),
+
+    # --- Energy: fuel & EV (Car.PERMISSION_ENERGY, read) ---
+    'FUEL_LEVEL': ('current fuel in milliliters',
+        'FUEL_LEVEL is remaining fuel in milliliters (never exceeds '
+        'INFO_FUEL_CAPACITY). Read-only, requires Car.PERMISSION_ENERGY.'),
+    'FUEL_LEVEL_LOW': ('low-fuel warning (bool)',
+        'FUEL_LEVEL_LOW is the low-fuel warning flag and applies to both fuel and EV '
+        'battery. Read-only, requires Car.PERMISSION_ENERGY.'),
+    'RANGE_REMAINING': ('remaining driving range (meters)',
+        'RANGE_REMAINING is remaining range in meters across all energy sources. '
+        'Read requires Car.PERMISSION_ENERGY; writing it (for range estimation apps) '
+        'requires Car.PERMISSION_ADJUST_RANGE_REMAINING.'),
+    'EV_BATTERY_LEVEL': ('current EV battery energy (Wh)',
+        'EV_BATTERY_LEVEL is the current usable battery energy in Watt-hours (not a '
+        'percentage). Read-only, requires Car.PERMISSION_ENERGY.'),
+    'EV_BATTERY_INSTANTANEOUS_CHARGE_RATE': ('instantaneous charge/discharge (W)',
+        'EV_BATTERY_INSTANTANEOUS_CHARGE_RATE is the instantaneous charging (positive) '
+        'or discharging (negative) rate in Watts. Read-only, Car.PERMISSION_ENERGY.'),
+    'EV_CHARGE_STATE': ('EV charging state',
+        'EV_CHARGE_STATE reports whether the vehicle is charging, fully charged, or '
+        'not charging. Read-only, requires Car.PERMISSION_ENERGY.'),
+
+    # --- Energy ports (Car.PERMISSION_ENERGY_PORTS, read) ---
+    'FUEL_DOOR_OPEN': ('fuel door open (bool)',
+        'FUEL_DOOR_OPEN is true when the fuel filler door is open. Read requires '
+        'Car.PERMISSION_ENERGY_PORTS; write requires Car.PERMISSION_CONTROL_ENERGY_PORTS.'),
+    'EV_CHARGE_PORT_OPEN': ('EV charge port open (bool)',
+        'EV_CHARGE_PORT_OPEN is true when the charge port is open. Read requires '
+        'Car.PERMISSION_ENERGY_PORTS; write requires Car.PERMISSION_CONTROL_ENERGY_PORTS.'),
+    'EV_CHARGE_PORT_CONNECTED': ('EV charge connector plugged in (bool)',
+        'EV_CHARGE_PORT_CONNECTED is true when a charge connector is physically '
+        'plugged in. Read-only, requires Car.PERMISSION_ENERGY_PORTS.'),
+
+    # --- Vehicle info (Car.PERMISSION_CAR_INFO, read, STATIC) ---
+    'INFO_MAKE': ('vehicle manufacturer (static)',
+        'INFO_MAKE is the manufacturer string. Static/read-only, requires '
+        'Car.PERMISSION_CAR_INFO.'),
+    'INFO_MODEL': ('vehicle model (static)',
+        'INFO_MODEL is the model string. Static/read-only, requires '
+        'Car.PERMISSION_CAR_INFO.'),
+    'INFO_FUEL_TYPE': ('supported fuel types (static)',
+        'INFO_FUEL_TYPE lists the fuel types the vehicle supports. Static/read-only, '
+        'requires Car.PERMISSION_CAR_INFO.'),
+    'INFO_EV_CONNECTOR_TYPE': ('supported EV connector types (static)',
+        'INFO_EV_CONNECTOR_TYPE lists supported EV charge connector types. Static/'
+        'read-only, requires Car.PERMISSION_CAR_INFO.'),
+    'INFO_VIN': ('vehicle identification number (static)',
+        'INFO_VIN is the VIN. Static/read-only, and unlike other INFO_* it requires '
+        'the more restricted Car.PERMISSION_IDENTIFICATION.'),
+
+    # --- HVAC / climate (Car.PERMISSION_CONTROL_CAR_CLIMATE, read/write) ---
+    'HVAC_TEMPERATURE_SET': ('target cabin temperature per zone',
+        'HVAC_TEMPERATURE_SET is the target temperature for an HVAC zone; it is zoned, '
+        'so writes must target a valid seat areaId. Read/write, requires '
+        'Car.PERMISSION_CONTROL_CAR_CLIMATE.'),
+    'HVAC_FAN_SPEED': ('fan speed level per zone',
+        'HVAC_FAN_SPEED is the fan speed for a zone. Zoned read/write, requires '
+        'Car.PERMISSION_CONTROL_CAR_CLIMATE; HVAC_POWER_ON must be on for it to apply.'),
+    'HVAC_FAN_DIRECTION': ('airflow direction per zone',
+        'HVAC_FAN_DIRECTION selects airflow direction (face/floor/defrost/combinations) '
+        'from HVAC_FAN_DIRECTION_AVAILABLE. Zoned read/write, Car.PERMISSION_CONTROL_CAR_CLIMATE.'),
+    'HVAC_AC_ON': ('air conditioning compressor on (bool)',
+        'HVAC_AC_ON toggles the A/C compressor. Read/write, requires '
+        'Car.PERMISSION_CONTROL_CAR_CLIMATE.'),
+    'HVAC_POWER_ON': ('HVAC master power for a zone (bool)',
+        'HVAC_POWER_ON is the master power for an HVAC zone; when off, the dependent '
+        'properties (fan, A/C, temperature) do not take effect. Read/write, '
+        'Car.PERMISSION_CONTROL_CAR_CLIMATE. Check HVAC_POWER_ON first when a climate write "does nothing".'),
+    'HVAC_DEFROSTER': ('windshield defroster per window (bool)',
+        'HVAC_DEFROSTER controls the defroster for a window area. Zoned read/write, '
+        'requires Car.PERMISSION_CONTROL_CAR_CLIMATE.'),
+    'HVAC_AUTO_ON': ('automatic climate control (bool)',
+        'HVAC_AUTO_ON enables automatic climate control. Read/write, requires '
+        'Car.PERMISSION_CONTROL_CAR_CLIMATE.'),
+
+    # --- Body ---
+    'DOOR_LOCK': ('door lock state per door (bool)',
+        'DOOR_LOCK is the lock state of a door (true = locked). Zoned read/write, '
+        'requires Car.PERMISSION_CONTROL_CAR_DOORS.'),
+    'DOOR_POS': ('door open position per door',
+        'DOOR_POS is a door\'s open position (0 = closed). Zoned read/write, requires '
+        'Car.PERMISSION_CONTROL_CAR_DOORS.'),
+    'WINDOW_POS': ('window position per window',
+        'WINDOW_POS is a window\'s position (0 = fully closed). Zoned read/write, '
+        'requires Car.PERMISSION_CONTROL_CAR_WINDOWS.'),
+    'SEAT_BELT_BUCKLED': ('seatbelt buckled per seat (bool)',
+        'SEAT_BELT_BUCKLED is true when a seat\'s belt is buckled. Zoned, requires '
+        'Car.PERMISSION_CONTROL_CAR_SEATS.'),
+
+    # --- Tires (Car.PERMISSION_TIRES, read) ---
+    'TIRE_PRESSURE': ('tire pressure per wheel (kPa)',
+        'TIRE_PRESSURE is per-wheel pressure in kPa (zoned by tire). Read-only, '
+        'requires Car.PERMISSION_TIRES.'),
+    'CRITICALLY_LOW_TIRE_PRESSURE': ('critically low tire pressure per wheel',
+        'CRITICALLY_LOW_TIRE_PRESSURE is the manufacturer\'s critical-low threshold '
+        'per wheel (below which driving is unsafe). Read-only, Car.PERMISSION_TIRES.'),
+
+    # --- Dynamics (Car.PERMISSION_CAR_DYNAMICS_STATE, read) ---
+    'ABS_ACTIVE': ('ABS currently engaged (bool)',
+        'ABS_ACTIVE is true while the anti-lock braking system is actively modulating. '
+        'Read-only, requires Car.PERMISSION_CAR_DYNAMICS_STATE.'),
+    'TRACTION_CONTROL_ACTIVE': ('traction control engaged (bool)',
+        'TRACTION_CONTROL_ACTIVE is true while traction control is intervening. '
+        'Read-only, requires Car.PERMISSION_CAR_DYNAMICS_STATE.'),
+
+    # --- Environment & lights ---
+    'ENV_OUTSIDE_TEMPERATURE': ('outside air temperature (°C)',
+        'ENV_OUTSIDE_TEMPERATURE is the outside temperature in Celsius. Read-only, '
+        'requires Car.PERMISSION_EXTERIOR_ENVIRONMENT.'),
+    'NIGHT_MODE': ('day/night mode for UI dimming (bool)',
+        'NIGHT_MODE is true when the car signals night — used to switch UI to a dark/'
+        'dimmed theme. Read-only, requires Car.PERMISSION_EXTERIOR_ENVIRONMENT. If the '
+        'UI does not dim at night, verify apps subscribe to this property.'),
+    'TURN_SIGNAL_STATE': ('turn signal state (none/left/right)',
+        'TURN_SIGNAL_STATE reports the active turn indicator. Read-only, requires '
+        'Car.PERMISSION_EXTERIOR_LIGHTS.'),
+    'HEADLIGHTS_STATE': ('headlight state',
+        'HEADLIGHTS_STATE reports the current headlight state. Read-only, requires '
+        'Car.PERMISSION_EXTERIOR_LIGHTS; the *_SWITCH property (write) needs '
+        'Car.PERMISSION_CONTROL_EXTERIOR_LIGHTS.'),
+
+    # --- Display units (Car.PERMISSION_READ_DISPLAY_UNITS, read) ---
+    'DISTANCE_DISPLAY_UNITS': ('distance unit (km/mi) shown to driver',
+        'DISTANCE_DISPLAY_UNITS is the distance unit shown to the driver. Read requires '
+        'Car.PERMISSION_READ_DISPLAY_UNITS; write requires '
+        'Car.PERMISSION_CONTROL_DISPLAY_UNITS. It is a global setting, so writes should '
+        'use areaId 0.'),
+    'FUEL_VOLUME_DISPLAY_UNITS': ('fuel volume unit (L/gal) shown to driver',
+        'FUEL_VOLUME_DISPLAY_UNITS is the fuel-volume unit shown to the driver. Read '
+        'Car.PERMISSION_READ_DISPLAY_UNITS; write Car.PERMISSION_CONTROL_DISPLAY_UNITS.'),
+
+    # --- Input & power ---
+    'HW_KEY_INPUT': ('hardware key event from the car',
+        'HW_KEY_INPUT delivers hardware key events (steering-wheel/dash buttons) to '
+        'Android via VHAL; CarInputService dispatches them. Used by the platform, not '
+        'normal apps.'),
+    'HW_ROTARY_INPUT': ('rotary controller input event',
+        'HW_ROTARY_INPUT delivers rotary-controller events; RotaryService turns them '
+        'into focus movement. Missing rotary navigation usually means the app layout '
+        'lacks car-ui-lib FocusArea/FocusParkingView, not a VHAL problem.'),
+    'DISPLAY_BRIGHTNESS': ('main display brightness',
+        'DISPLAY_BRIGHTNESS is the vehicle-controlled brightness of the main display '
+        '(used to sync Android brightness with the car). Platform property.'),
+}
+
+# One combined regex over all property names (longest-first so e.g.
+# PERF_VEHICLE_SPEED_DISPLAY matches before PERF_VEHICLE_SPEED).
+_VHAL_PROP_RE = re.compile(
+    r'\b(' + '|'.join(sorted((re.escape(k) for k in VHAL_PROPERTIES), key=len, reverse=True)) + r')\b'
+)
+
+
+def _property_entry(name):
+    """Synthesize a KnowledgeEntry from the VHAL property table."""
+    short, guidance = VHAL_PROPERTIES[name]
+    return KnowledgeEntry(
+        id=f'vhal-prop-{name.lower()}',
+        category='VHAL property',
+        signature=_VHAL_PROP_RE,  # unused after synthesis
+        hint=f'{name} — {short}',
+        guidance=guidance,
+    )
+
+
+def _find_vhal_property_names(text):
+    """Distinct VehicleProperty names referenced in text, in order of appearance."""
+    seen, out = set(), []
+    for m in _VHAL_PROP_RE.finditer(text):
+        name = m.group(1)
+        if name not in seen:
+            seen.add(name)
+            out.append(name)
+    return out
+
+
+def find_matches(text, limit=4):
+    """Return knowledge entries matching `text`.
+
+    Signature entries (specific error patterns) come first, then any referenced
+    VHAL property facts. Dedups by id, caps at `limit`.
     """
     if not text:
         return []
     matches = []
+    seen = set()
     for entry in KNOWLEDGE:
         if entry.signature.search(text):
             matches.append(entry)
+            seen.add(entry.id)
             if len(matches) >= limit:
-                break
+                return matches
+    for name in _find_vhal_property_names(text):
+        eid = f'vhal-prop-{name.lower()}'
+        if eid in seen:
+            continue
+        matches.append(_property_entry(name))
+        seen.add(eid)
+        if len(matches) >= limit:
+            break
     return matches
 
 
