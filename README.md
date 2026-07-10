@@ -1,4 +1,4 @@
-# AILog — AI-Powered Android/AOSP Log Interpreter
+# AILog — AI Log Triage for AOSP & Android Automotive
 
 [![Tests](https://github.com/zoddiacc/AILog/actions/workflows/test.yml/badge.svg)](https://github.com/zoddiacc/AILog/actions/workflows/test.yml)
 [![PyPI](https://img.shields.io/pypi/v/ailog-cli)](https://pypi.org/project/ailog-cli/)
@@ -7,16 +7,18 @@
 
 > Stop drowning in 50,000 lines. Let AI find what matters.
 
-AILog is a CLI tool that interprets Android build logs, logcat output, and AOSP compilation errors using AI. It filters noise first (free, instant), then sends only important lines to an AI model for root cause analysis and fix suggestions.
+AILog is a CLI tool for **AOSP and Android Automotive (AAOS) platform developers** — the people debugging VHAL, CarService, HALs, and framework code in a terminal, not an IDE. It wraps `m` builds and `adb logcat`, filters the noise with rule-based patterns first (free, instant), then sends only the important lines to an AI model for root-cause analysis and fix suggestions.
+
+By default the AI runs **locally via Ollama, so logs never leave your machine** — built for OEM and Tier-1 environments where they can't. It works just as well on regular Android app logcat, too.
 
 ## Features
 
+- **Automotive-aware**: Dedicated patterns for VHAL, CarService, CarAudio, EVS
+- **AOSP build wrapper**: Wraps `m`/`make` with real-time error interpretation
+- **Local-first AI**: Ollama by default (logs stay on your machine); OpenAI-compatible APIs and Anthropic Claude optional
 - **Two-stage filtering**: Rule-based noise filter removes ~70% of lines before AI, saving tokens and time
-- **Multi-provider AI**: Ollama (local, free), OpenAI-compatible APIs, Anthropic Claude
-- **Build wrapper**: Wraps `m`/`make` with real-time error interpretation
 - **Logcat wrapper**: Wraps `adb logcat` with noise filtering and batch AI analysis
 - **File analyzer**: Batch analyze saved log files with chunked processing
-- **Automotive-aware**: Special patterns for VHAL, CarService, CarAudio, EVS
 
 ## Requirements
 
@@ -99,20 +101,20 @@ ailog config --api-key sk-ant-...
 ## Usage
 
 ```bash
+# Wrap an AOSP build (run from a lunch'd shell)
+ailog build
+ailog build -- -j16 framework
+
+# Live logcat with AI
+ailog cat --focus VHAL --noise-level high        # Focus on a component + aggressive filtering
+ailog cat --explain                              # AI explains each error inline
+ailog cat -s DEVICE_SERIAL --explain             # When multiple devices connected
+ailog cat -p com.example.myapp --explain         # App development: filter to one package
+
 # Analyze a saved log file
 ailog analyze build.log
 ailog analyze logcat.txt --focus CarService
 ailog analyze build.log --output report.md
-
-# Live logcat with AI
-ailog cat --explain                              # AI explains each error inline
-ailog cat -p com.example.myapp --explain         # Filter to your app only
-ailog cat -s DEVICE_SERIAL --explain             # When multiple devices connected
-ailog cat --focus VHAL --noise-level high        # Focus + aggressive filtering
-
-# Wrap an AOSP build
-ailog build
-ailog build -- -j16 framework
 ```
 
 ## Commands

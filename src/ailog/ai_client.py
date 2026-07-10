@@ -31,6 +31,16 @@ def _redact_secrets(text):
     return text
 
 
+def _strip_code_fences(text):
+    """Strip wrapping markdown code fences that models add despite instructions."""
+    clean = text.strip()
+    if clean.startswith('```'):
+        clean = '\n'.join(clean.split('\n')[1:])
+    if clean.endswith('```'):
+        clean = '\n'.join(clean.split('\n')[:-1])
+    return clean.strip()
+
+
 SYSTEM_PROMPT = """You are an expert Android/AOSP and automotive software engineer specializing in log analysis.
 Your job is to interpret Android build logs, logcat output, and AOSP compilation errors for developers.
 
@@ -319,13 +329,7 @@ class AIClient:
 
         try:
             raw = self.chat(NOISE_FILTER_PROMPT, prompt, max_tokens=2000)
-            # Strip any markdown fences
-            clean = raw.strip()
-            if clean.startswith("```"):
-                clean = "\n".join(clean.split("\n")[1:])
-            if clean.endswith("```"):
-                clean = "\n".join(clean.split("\n")[:-1])
-            return json.loads(clean.strip())
+            return json.loads(_strip_code_fences(raw))
         except (json.JSONDecodeError, KeyError):
             return {"kept": log_lines, "filtered_count": 0, "patterns": []}
 
@@ -446,7 +450,11 @@ class AIClient:
         )
         # Scale max tokens to file size (rough: 1 token ≈ 4 chars), with a floor
         max_tok = max(1000, self._estimate_tokens(source_content) + 200)
-        return self.chat(self._system_prompt, prompt, max_tokens=max_tok, timeout=60)
+        raw = self.chat(self._system_prompt, prompt, max_tokens=max_tok, timeout=60)
+        # Models (especially small local ones) often wrap the file in ```fences```
+        # despite the instructions — stripping them here prevents writing fences
+        # into the user's source file.
+        return _strip_code_fences(raw)
 
     def explain_line(self, line, context_lines=None):
         """Explain a single error/warning line with context."""

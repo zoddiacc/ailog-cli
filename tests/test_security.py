@@ -45,7 +45,9 @@ class TestRedactSecrets(unittest.TestCase):
         self.assertEqual(result, text)
 
     def test_google_api_key(self):
-        text = "key AIzaSyA1B2C3D4E5F6G7H8I9J0K1L2M3N4O5P6Q"
+        # Fake key assembled at runtime so secret scanners don't flag it
+        fake_key = "AIzaSy" + "A1B2C3D4E5F6G7H8I9J0K1L2M3N4O5P6Q"
+        text = "key " + fake_key
         result = _redact_secrets(text)
         self.assertNotIn('AIzaSy', result)
 

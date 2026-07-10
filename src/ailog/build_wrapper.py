@@ -2,6 +2,9 @@
 Build wrapper: intercepts AOSP make/m output and provides AI interpretation.
 """
 
+import os
+import shlex
+import shutil
 import subprocess
 import time
 from collections import deque
@@ -26,6 +29,7 @@ class BuildWrapper:
         self._warning_lines = deque(maxlen=100)
         self._filtered_count = 0
         self._ai_calls = 0
+        self._cmd_display = None
 
     def run(self, args):
         # Determine the build command
@@ -40,10 +44,10 @@ class BuildWrapper:
                 "No build command found (m or make). "
                 "Are you in an AOSP source tree? Run 'source build/envsetup.sh && lunch' first."
             )
-            return
+            return 1
 
         self.display.header('AILog — AI Build Interpreter')
-        self.display.info(f"Command: {' '.join(cmd)}")
+        self.display.info(f"Command: {self._cmd_display or ' '.join(cmd)}")
         self.display.info(f"Provider: {self.config.provider} ({self.ai.model})")
         if args.module:
             self.display.info(f"Module hint: {args.module}")
@@ -71,7 +75,7 @@ class BuildWrapper:
                 f"Build command not found: {cmd[0]}. "
                 f"Are you in an AOSP source tree? Run 'source build/envsetup.sh && lunch' first."
             )
-            return
+            return 1
 
         pending_batch = []
 
@@ -109,7 +113,7 @@ class BuildWrapper:
             proc.terminate()
             proc.wait()
             self.display.warning("Build interrupted by user.")
-            return
+            return 130
 
         proc.wait()
         elapsed = time.time() - start_time
@@ -120,6 +124,7 @@ class BuildWrapper:
 
         # Final summary
         self._final_summary(proc.returncode, elapsed, args.module)
+        return proc.returncode
 
     def _analyze_batch(self, lines, module_hint, summary_only):
         """Call AI on a batch of lines that contain errors."""
@@ -179,8 +184,26 @@ class BuildWrapper:
                                 level='error' if returncode != 0 else 'success')
 
     def _resolve_build_cmd(self, extra_args):
-        """Try to find the right build command."""
-        import shutil
+        """Try to find the right build command.
+
+        AOSP's 'm' is a shell function defined by build/envsetup.sh, not an
+        executable, so it must run inside bash with envsetup sourced. The
+        lunch environment (TARGET_PRODUCT etc.) is inherited from the shell
+        that launched ailog.
+        """
+        extra_args = extra_args or []
+
+        envsetup = None
+        build_top = os.environ.get('ANDROID_BUILD_TOP')
+        if build_top and os.path.isfile(os.path.join(build_top, 'build', 'envsetup.sh')):
+            envsetup = os.path.join(build_top, 'build', 'envsetup.sh')
+        elif os.path.isfile(os.path.join('build', 'envsetup.sh')):
+            envsetup = os.path.join('build', 'envsetup.sh')
+
+        if envsetup:
+            self._cmd_display = ' '.join(['m'] + extra_args) + f"  (via {envsetup})"
+            script = f'source {shlex.quote(envsetup)} >/dev/null 2>&1 && m "$@"'
+            return ['bash', '-c', script, 'm'] + extra_args
 
         if shutil.which('m'):
             base = ['m']
@@ -189,4 +212,6 @@ class BuildWrapper:
         else:
             return None
 
-        return base + (extra_args if extra_args else [])
+        cmd = base + extra_args
+        self._cmd_display = ' '.join(cmd)
+        return cmd

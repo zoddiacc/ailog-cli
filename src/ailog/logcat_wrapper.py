@@ -84,7 +84,7 @@ class LogcatWrapper:
                         serial = line.split()[0]
                         self.display.info(f"  {serial}")
                     self.display.info(f"\nExample: ailog cat -s {lines[0].split()[0]} --explain")
-                    return
+                    return 1
             except (subprocess.TimeoutExpired, FileNotFoundError):
                 pass
 
@@ -92,7 +92,7 @@ class LogcatWrapper:
         if args.package:
             pid = self._resolve_pid(adb_cmd, args.package)
             if pid is None:
-                return
+                return 1
             logcat_args = ['--pid=' + pid] + (logcat_args if logcat_args else [])
 
         # Default to showing only new logs (skip old buffer) unless user
@@ -141,7 +141,7 @@ class LogcatWrapper:
             self.display.error(
                 "adb not found. Install Android SDK platform-tools and add to your PATH."
             )
-            return
+            return 1
 
         # Start batch AI timer thread
         if not self.explain_mode:
@@ -256,6 +256,7 @@ class LogcatWrapper:
         if self._in_crash_block:
             self._flush_crash_summary()
         self._show_session_summary()
+        return 0
 
     def _resolve_pid(self, adb_cmd, package):
         """Resolve a package name to a PID using adb shell pidof."""
@@ -480,6 +481,10 @@ class LogcatWrapper:
         except RuntimeError as e:
             self.display.error(f'AI fix generation failed: {e}')
             return
+
+        # Fence stripping trims trailing whitespace; keep the file's final newline
+        if original_content.endswith('\n') and not fixed_content.endswith('\n'):
+            fixed_content += '\n'
 
         # Show diff preview
         old_lines = original_content.splitlines()
