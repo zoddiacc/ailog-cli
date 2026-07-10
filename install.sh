@@ -11,15 +11,15 @@ CONFIG_DIR="$HOME/.config/ailog"
 echo "Installing ailog — AI-powered Android/AOSP log interpreter"
 echo ""
 
-# Check Python 3.8+
+# Check Python 3.9+
 if ! command -v python3 &>/dev/null; then
     echo "Error: python3 is required but not found."
     exit 1
 fi
 
 PY_VERSION=$(python3 -c "import sys; print(sys.version_info.major * 10 + sys.version_info.minor)")
-if [ "$PY_VERSION" -lt "38" ]; then
-    echo "Error: Python 3.8+ required (found $(python3 --version))"
+if [ "$PY_VERSION" -lt "39" ]; then
+    echo "Error: Python 3.9+ required (found $(python3 --version))"
     exit 1
 fi
 
@@ -35,7 +35,7 @@ rm -rf "$AILOG_DIR/src"
 
 # Copy source files
 cp -r src/ "$AILOG_DIR/src/"
-cp ailog.py "$AILOG_DIR/ailog.py"
+cp run.py "$AILOG_DIR/run.py"
 
 # Copy example files if they exist
 if [ -d "examples" ]; then
@@ -45,7 +45,7 @@ fi
 # Create launcher script
 cat > "$INSTALL_DIR/ailog" << 'EOF'
 #!/usr/bin/env bash
-exec python3 "$HOME/.local/share/ailog/ailog.py" "$@"
+exec python3 "$HOME/.local/share/ailog/run.py" "$@"
 EOF
 
 chmod +x "$INSTALL_DIR/ailog"

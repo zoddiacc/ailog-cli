@@ -29,8 +29,7 @@ jobs:
 
       - name: Verify tag matches package version
         run: |
-          # Read the installed dist metadata (not `import ailog`, which from the
-          # repo root would resolve to the top-level ailog.py launcher shim).
+          # Read the installed dist metadata (robust regardless of working dir).
           VERSION=$(python3 -c "import importlib.metadata as m; print(m.version('ailog-cli'))")
           if [ "${GITHUB_REF_NAME}" != "v${VERSION}" ]; then
             echo "::error::Tag ${GITHUB_REF_NAME} does not match package version v${VERSION}"
