@@ -8,6 +8,7 @@ from .__init__ import __version__
 from .build_wrapper import BuildWrapper
 from .logcat_wrapper import LogcatWrapper
 from .analyzer import BatchAnalyzer
+from .bugreport import BugreportAnalyzer
 from .config_manager import ConfigManager
 from .display import Display
 
@@ -24,6 +25,8 @@ def main():
   ailog cat --focus VHAL --explain   Focus AI on a component, explain errors inline
   ailog analyze build.log            Analyze a saved build log
   ailog analyze logcat.txt --full    Full analysis without noise filtering
+  ailog bugreport bugreport.zip      Triage an adb bugreport (crashes/ANRs/SELinux)
+  ailog bugreport br.zip --no-ai     Instant knowledge-pack triage, no model
   ailog config --show                Show current configuration
   ailog config --provider ollama     Switch to local Ollama
   ailog config --list-models         List available Ollama models
@@ -88,6 +91,17 @@ def main():
     analyze_parser.add_argument('--focus', type=str,
                                 help='Focus on a specific component or error')
 
+    # --- bugreport ---
+    bugreport_parser = subparsers.add_parser('bugreport',
+                                             help='Triage an adb bugreport (.zip or .txt)')
+    bugreport_parser.add_argument('file', help='Path to the bugreport .zip or .txt')
+    bugreport_parser.add_argument('--no-ai', action='store_true',
+                                  help='Knowledge-pack triage only, no AI calls (works offline)')
+    bugreport_parser.add_argument('--focus', type=str,
+                                  help='Only show issues mentioning this package/keyword')
+    bugreport_parser.add_argument('--output', type=str,
+                                  help='Save triage report to a markdown file')
+
     # --- config ---
     config_parser = subparsers.add_parser('config', help='Configure ailog')
     config_parser.add_argument('--show', action='store_true',
@@ -120,8 +134,10 @@ def main():
     if args.command == 'config':
         handle_config(args, config, display)
     else:
-        # For non-ollama providers, check API key exists
-        if config.provider != 'ollama' and not config.get_api_key():
+        # For non-ollama providers, check API key exists — unless this run makes
+        # no AI calls at all (bugreport --no-ai is pure deterministic triage).
+        skip_ai = args.command == 'bugreport' and getattr(args, 'no_ai', False)
+        if not skip_ai and config.provider != 'ollama' and not config.get_api_key():
             display.error(
                 f"No API key configured for {config.provider}. "
                 f"Run: ailog config --api-key YOUR_KEY"
@@ -141,6 +157,9 @@ def main():
             sys.exit(wrapper.run(args) or 0)
         elif args.command == 'analyze':
             analyzer = BatchAnalyzer(config, display)
+            sys.exit(analyzer.run(args) or 0)
+        elif args.command == 'bugreport':
+            analyzer = BugreportAnalyzer(config, display)
             sys.exit(analyzer.run(args) or 0)
 
 

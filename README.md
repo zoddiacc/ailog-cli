@@ -115,6 +115,11 @@ ailog cat -p com.example.myapp --explain         # App development: filter to on
 ailog analyze build.log
 ailog analyze logcat.txt --focus CarService
 ailog analyze build.log --output report.md
+
+# Triage an adb bugreport (crashes, ANRs, native tombstones, SELinux denials)
+ailog bugreport bugreport-device-2026.zip
+ailog bugreport bugreport.zip --no-ai            # Instant triage, no model needed
+ailog bugreport bugreport.zip --focus com.oem.dashboard --output triage.md
 ```
 
 ## Commands
@@ -146,6 +151,18 @@ ailog analyze build.log --output report.md
 | `--focus <tag/keyword>` | Focus AI attention |
 | `--explain` | Inline AI explanations for each error |
 | `--batch-interval <seconds>` | AI summary interval (default: 5) |
+
+### `ailog bugreport <file>`
+
+Triage an `adb bugreport` (`.zip` or `.txt`) — extracts Java crashes, native
+tombstones, ANRs, watchdog kills, and SELinux denials, and explains each using
+the AOSP/Automotive knowledge pack (and optionally AI).
+
+| Flag | Description |
+|------|-------------|
+| `--no-ai` | Knowledge-pack triage only, no AI calls (works fully offline) |
+| `--focus <keyword>` | Only show issues mentioning this package/keyword |
+| `--output <path>` | Save the triage report to a markdown file |
 
 ### `ailog config`
 
