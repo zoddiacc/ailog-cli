@@ -2,6 +2,7 @@
 Terminal display utilities with ANSI colors and formatting.
 """
 
+import contextlib
 import re
 import sys
 import shutil
@@ -71,8 +72,12 @@ def supports_color():
 
 
 class Display:
-    def __init__(self, use_color=None):
-        self.color = use_color if use_color is not None else supports_color()
+    def __init__(self, use_color=None, json_mode=False):
+        # In JSON mode, stdout is reserved for the single JSON document, so all
+        # decorative output is suppressed and diagnostics go to stderr.
+        self.json = json_mode
+        self.color = False if json_mode else (
+            use_color if use_color is not None else supports_color())
         self.term_width = shutil.get_terminal_size().columns
 
     def _c(self, code):
@@ -84,6 +89,8 @@ class Display:
         return ''.join(codes) + text + Colors.RESET
 
     def separator(self, char='─', label=None):
+        if self.json:
+            return
         if label:
             label_str = f' {label} '
             pad = (self.term_width - len(label_str)) // 2
@@ -93,17 +100,23 @@ class Display:
         print(self._fmt(line, Colors.DIM))
 
     def header(self, text):
+        if self.json:
+            return
         print()
         self.separator('═', text)
         print()
 
     def section(self, text):
+        if self.json:
+            return
         print()
         print(self._fmt(f'▶ {text}', Colors.BOLD, Colors.BRIGHT_CYAN))
         print(self._fmt('─' * min(len(text) + 4, self.term_width), Colors.DIM))
 
     def ai_box(self, title, content, level='info'):
         """Render a boxed AI interpretation block."""
+        if self.json:
+            return
         title = sanitize_terminal(title)
         content = sanitize_terminal(content)
         colors = {
@@ -149,6 +162,8 @@ class Display:
 
     def crash_summary_box(self, metadata, ai_analysis):
         """Render a crash summary with extracted metadata and AI analysis."""
+        if self.json:
+            return
         # Both metadata (parsed from the log) and ai_analysis are attacker-influenced.
         metadata = {k: (sanitize_terminal(v) if isinstance(v, str) else v)
                     for k, v in metadata.items()}
@@ -277,6 +292,8 @@ class Display:
 
     def log_line(self, line, level=None):
         """Print a log line with appropriate coloring."""
+        if self.json:
+            return
         line = sanitize_terminal(line)
         if level == 'error' or any(k in line for k in ['ERROR', 'FAILED', 'fatal error', 'error:']):
             print(self._fmt(line, Colors.BRIGHT_RED))
@@ -291,6 +308,8 @@ class Display:
 
     def filtered_line(self, line, tag=None):
         """Print a logcat line."""
+        if self.json:
+            return
         line = sanitize_terminal(line)
         if ' E ' in line or line.startswith('E/'):
             print(self._fmt(line, Colors.BRIGHT_RED))
@@ -306,6 +325,8 @@ class Display:
             print(line)
 
     def noise_filtered(self, count):
+        if self.json:
+            return
         """Show noise filter stats inline."""
         if count > 0:
             print(self._fmt(
@@ -314,23 +335,36 @@ class Display:
             ))
 
     def spinner_start(self, text):
-        """Return a spinner context."""
+        """Return a spinner context (no-op in JSON mode)."""
+        if self.json:
+            return contextlib.nullcontext()
         return Spinner(text, self.color)
 
     def success(self, text):
+        if self.json:
+            return
         print(self._fmt(f'✅ {text}', Colors.BRIGHT_GREEN))
 
     def error(self, text):
+        # Errors always go to stderr, so they're visible even in JSON mode
+        # without corrupting the JSON document on stdout.
         print(self._fmt(f'🔴 {text}', Colors.BRIGHT_RED), file=sys.stderr)
 
     def warning(self, text):
+        if self.json:
+            print(f'⚠️  {text}', file=sys.stderr)
+            return
         print(self._fmt(f'⚠️  {text}', Colors.BRIGHT_YELLOW))
 
     def info(self, text):
+        if self.json:
+            return
         print(self._fmt(f'ℹ️  {text}', Colors.BRIGHT_CYAN))
 
     def hint(self, text):
         """Print a human-readable hint below a log line."""
+        if self.json:
+            return
         text = sanitize_terminal(text)
         print(self._fmt(f'    ↳ {text}', Colors.DIM, Colors.BRIGHT_GREEN))
 
@@ -355,6 +389,8 @@ class Display:
 
     def prompt_yes_no(self, question):
         """Prompt user with a yes/no question. Returns True for yes, False for no."""
+        if self.json:
+            return False  # non-interactive in JSON mode
         try:
             sys.stdout.write(
                 self._fmt(f'\n  ❓ {question} [Y/n] ', Colors.BRIGHT_CYAN, Colors.BOLD)
@@ -367,10 +403,14 @@ class Display:
             return False
 
     def dim(self, text):
+        if self.json:
+            return
         print(self._fmt(text, Colors.DIM))
 
     def stats_bar(self, stats: dict):
         """Render a one-line stats summary."""
+        if self.json:
+            return
         parts = []
         colors_map = {
             'crashes':  Colors.BRIGHT_RED,

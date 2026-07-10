@@ -136,9 +136,14 @@ These apply to any command (place them before the subcommand, e.g. `ailog --reda
 | Flag | Description |
 |------|-------------|
 | `--redact` / `--no-redact` | Force secret redaction on/off before sending log content to AI. **On by default for cloud providers, off for local Ollama.** |
+| `--json` | Machine-readable JSON output (for `analyze` and `bugreport`) — ideal for CI pipelines |
 | `--dry-run` | Show what AI call would be made without sending it |
 | `--show-tokens` | Print estimated token counts for AI calls |
 | `--no-color` | Disable colored output |
+
+With `--json`, all decorative output is suppressed and a single JSON document is
+printed to stdout (diagnostics go to stderr), so you can pipe results into `jq`
+or a CI step: `ailog --json bugreport br.zip --no-ai | jq '.issue_counts'`.
 
 > **Privacy:** with local Ollama (the default) nothing leaves your machine. When you switch to a cloud provider, secrets (API keys, tokens, passwords, JWTs, etc.) are redacted from log content and source files by default — pass `--no-redact` only if you understand the implications.
 

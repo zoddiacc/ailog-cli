@@ -138,6 +138,28 @@ class TestRunNoAI(unittest.TestCase):
         rc = _analyzer().run(_Args('/no/such/bugreport.zip', no_ai=True))
         self.assertEqual(rc, 1)
 
+    def test_json_output_is_valid(self):
+        import io
+        import json as _json
+        import contextlib
+        from src.ailog.display import Display
+
+        with tempfile.TemporaryDirectory() as d:
+            p = os.path.join(d, 'bugreport-test.txt')
+            with open(p, 'w') as f:
+                f.write(SAMPLE)
+            display = Display(json_mode=True)
+            a = BugreportAnalyzer(_Cfg(), display)
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                rc = a.run(_Args(p, no_ai=True))
+            self.assertEqual(rc, 0)
+            data = _json.loads(buf.getvalue())  # must be the only thing on stdout
+            self.assertIn('issues', data)
+            self.assertIn('device', data)
+            self.assertEqual(data['selinux'][0]['tclass'], 'file')
+            self.assertTrue(any(i['kind'] == 'native' for i in data['issues']))
+
     def test_no_issues_clean_report(self):
         with tempfile.TemporaryDirectory() as d:
             p = os.path.join(d, 'clean.txt')

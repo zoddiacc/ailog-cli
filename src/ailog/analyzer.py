@@ -2,6 +2,7 @@
 Batch analyzer: analyze a saved log file with AI.
 """
 
+import json
 import os
 import re
 import sys
@@ -38,6 +39,12 @@ class BatchAnalyzer:
         self.display = display
         self.ai = AIClient(config)
         self.max_ai_calls = config.get('max_ai_calls', 5)
+        self._analysis = None   # captured for JSON output
+        self._summary = None
+
+    def _nl(self):
+        if not self.display.json:
+            print()
 
     def run(self, args):
         # Handle stdin
@@ -86,7 +93,7 @@ class BatchAnalyzer:
         if args.focus:
             self.display.info(f"Focus: {args.focus}")
         self.display.separator()
-        print()
+        self._nl()
 
         # For very large files, take head + tail
         if len(lines) > self.MAX_LINES:
@@ -103,22 +110,33 @@ class BatchAnalyzer:
         kept_lines, filtered_count = nf.filter_batch(lines, mode=log_type)
         errors, warnings = nf.extract_errors_warnings(kept_lines)
 
-        self.display.stats_bar({
-            'total lines': len(lines),
+        stats = {
+            'total_lines': len(lines),
             'filtered':    filtered_count,
             'kept':        len(kept_lines),
             'errors':      len(errors),
             'warnings':    len(warnings),
-        })
-        print()
+        }
+        self.display.stats_bar(stats)
+        self._nl()
 
         # For large files: chunk analysis
         if len(kept_lines) > self.CHUNK_SIZE:
-            return self._analyze_chunked(kept_lines, errors, warnings, filtered_count,
+            code = self._analyze_chunked(kept_lines, errors, warnings, filtered_count,
                                          log_type, args.focus, args.output)
         else:
-            return self._analyze_full(kept_lines, errors, warnings, filtered_count,
+            code = self._analyze_full(kept_lines, errors, warnings, filtered_count,
                                       log_type, args.focus, args.output)
+
+        if self.display.json:
+            print(json.dumps({
+                'file': filepath,
+                'type': log_type,
+                'stats': stats,
+                'analysis': self._analysis,
+                'summary': self._summary,
+            }, indent=2))
+        return code
 
     def _analyze_full(self, lines, errors, warnings, filtered_count,
                       log_type, focus, output_file):
@@ -135,6 +153,7 @@ class BatchAnalyzer:
                 self.display.error(f"AI analysis failed: {e}")
                 return 1
 
+        self._analysis = analysis
         self.display.ai_box('Full Log Analysis', analysis, level='error' if errors else 'info')
 
         summary = None
@@ -147,6 +166,7 @@ class BatchAnalyzer:
                     self.display.warning(f"Summary failed: {e}")
 
             if summary:
+                self._summary = summary
                 self.display.ai_box('Priority Summary & Fix Order', summary, level='warning')
 
         if output_file:
@@ -157,7 +177,7 @@ class BatchAnalyzer:
                          log_type, focus, output_file):
         """Analyze a large file in chunks, then summarize."""
         self.display.info(f"Large file — analyzing in chunks of {self.CHUNK_SIZE} lines...")
-        print()
+        self._nl()
 
         chunk_analyses = []
         # Process up to MAX_LINES worth of kept lines
@@ -207,10 +227,12 @@ class BatchAnalyzer:
                     self.display.warning(f"Final summary failed: {e}")
 
             if summary:
+                self._summary = summary
                 self.display.ai_box('Priority Fix Order', summary, level='error')
 
+        self._analysis = '\n\n---\n\n'.join(chunk_analyses)
         if output_file:
-            return self._save_report(output_file, '\n\n---\n\n'.join(chunk_analyses), summary)
+            return self._save_report(output_file, self._analysis, summary)
         return 0
 
     def _save_report(self, path, analysis, summary=None):

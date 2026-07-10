@@ -37,6 +37,8 @@ def main():
                         version=f'%(prog)s {__version__}')
     parser.add_argument('--no-color', action='store_true',
                         help='Disable colored output')
+    parser.add_argument('--json', action='store_true',
+                        help='Machine-readable JSON output (analyze and bugreport only)')
     parser.add_argument('--dry-run', action='store_true',
                         help='Show what AI call would be made without sending it')
     parser.add_argument('--show-tokens', action='store_true',
@@ -128,11 +130,16 @@ def main():
         parser.print_help()
         sys.exit(0)
 
-    display = Display(use_color=False if args.no_color else None)
+    if args.json and args.command in ('build', 'cat', 'config'):
+        print("--json is only supported for 'analyze' and 'bugreport'.", file=sys.stderr)
+        sys.exit(2)
+
+    display = Display(use_color=False if args.no_color else None, json_mode=args.json)
     config = ConfigManager()
     config.dry_run = args.dry_run
     config.show_tokens = args.show_tokens
     config.redact = args.redact
+    config.json_output = args.json
 
     if args.command == 'config':
         handle_config(args, config, display)

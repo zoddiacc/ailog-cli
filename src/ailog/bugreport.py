@@ -11,6 +11,7 @@ Fully usable with no model at all via --no-ai (the knowledge-pack triage alone
 is valuable and always correct).
 """
 
+import json
 import os
 import re
 import time
@@ -91,6 +92,11 @@ class BugreportAnalyzer:
         self.max_ai_calls = config.get('max_ai_calls', 5)
         self._ai_calls = 0
 
+    def _nl(self):
+        """A blank line in pretty mode; nothing in JSON mode."""
+        if not self.display.json:
+            print()
+
     def run(self, args):
         content = self._read_source(args.file)
         if content is None:
@@ -118,16 +124,18 @@ class BugreportAnalyzer:
         })
 
         if not issues and not selinux:
-            print()
+            self._nl()
             self.display.success("No crashes, ANRs, watchdog kills, or SELinux denials found.")
             if args.output:
                 self._save_report(args.output, device, [], [])
+            if self.display.json:
+                self._emit_json(args.file, device, [], selinux)
             return 0
 
         report_sections = []
         shown = issues[:MAX_ISSUES_SHOWN]
         for idx, issue in enumerate(shown, 1):
-            print()
+            self._nl()
             self.display.section(f"{idx}. [{issue.kind.upper()}] {issue.title}")
 
             # Deterministic triage first — instant, always correct, no model.
@@ -143,7 +151,7 @@ class BugreportAnalyzer:
             report_sections.append((issue, hint_lines, analysis))
 
         if len(issues) > MAX_ISSUES_SHOWN:
-            print()
+            self._nl()
             self.display.warning(
                 f"Showing first {MAX_ISSUES_SHOWN} of {len(issues)} issues. "
                 f"Use --focus <package/keyword> to narrow down."
@@ -155,7 +163,38 @@ class BugreportAnalyzer:
         if args.output:
             self._save_report(args.output, device, report_sections, selinux)
 
+        if self.display.json:
+            self._emit_json(args.file, device, report_sections, selinux)
+
         return 0
+
+    def _emit_json(self, file, device, report_sections, selinux):
+        """Print the triage result as a single JSON document to stdout."""
+        issues = []
+        for issue, hint_lines, analysis in report_sections:
+            issues.append({
+                'kind': issue.kind,
+                'title': issue.title,
+                'hints': hint_lines,
+                'analysis': analysis,
+            })
+        result = {
+            'file': file,
+            'device': {label: value for label, value in device},
+            'issue_counts': {
+                'java': sum(1 for i in issues if i['kind'] == 'java'),
+                'native': sum(1 for i in issues if i['kind'] == 'native'),
+                'anr': sum(1 for i in issues if i['kind'] == 'anr'),
+                'watchdog': sum(1 for i in issues if i['kind'] == 'watchdog'),
+                'selinux': len(selinux),
+            },
+            'issues': issues,
+            'selinux': [
+                {'scontext': s[1], 'tcontext': s[2], 'tclass': s[3], 'perm': s[0]}
+                for s in selinux
+            ],
+        }
+        print(json.dumps(result, indent=2))
 
     # ---------------- input ----------------
 
@@ -312,7 +351,7 @@ class BugreportAnalyzer:
     # ---------------- SELinux ----------------
 
     def _show_selinux(self, selinux):
-        print()
+        self._nl()
         self.display.section(f"SELinux denials ({len(selinux)} unique)")
         guidance = knowledge_pack.find_matches('avc: denied { read } scontext=x tcontext=y tclass=file')
         if guidance:
