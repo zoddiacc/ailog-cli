@@ -10,6 +10,8 @@ import time
 import urllib.request
 import urllib.error
 
+from . import knowledge_pack
+
 # (pattern, replacement) pairs for common secrets, redacted before sending to AI.
 # Most collapse to [REDACTED]; URL patterns keep structure (scheme/host/param name)
 # so the redacted log stays readable.
@@ -335,8 +337,9 @@ class AIClient:
     def analyze_build_log(self, log_text, module_hint=None):
         """Analyze a build log and return AI interpretation."""
         context = f"Module being built: {module_hint}\n\n" if module_hint else ""
+        domain = knowledge_pack.retrieve_context(log_text)
         prompt = (
-            f"{context}Analyze this Android/AOSP build log and explain what went wrong:\n\n"
+            f"{domain}{context}Analyze this Android/AOSP build log and explain what went wrong:\n\n"
             f"```\n{log_text}\n```"
         )
         return self.chat(self._system_prompt, prompt)
@@ -344,8 +347,9 @@ class AIClient:
     def analyze_logcat_batch(self, log_lines, focus=None):
         """Analyze a batch of logcat lines."""
         text = "\n".join(log_lines)
+        domain = knowledge_pack.retrieve_context(text)
         focus_hint = f"Focus especially on issues related to: {focus}\n\n" if focus else ""
-        prompt = f"{focus_hint}Analyze these Android logcat lines:\n\n```\n{text}\n```"
+        prompt = f"{domain}{focus_hint}Analyze these Android logcat lines:\n\n```\n{text}\n```"
         return self.chat(self._system_prompt, prompt)
 
     def filter_noise(self, log_lines):
@@ -430,6 +434,12 @@ class AIClient:
             if err_key.lower() in exception_type.lower() or err_key.lower() in text.lower():
                 extra_hint = f'\n\nERROR-SPECIFIC GUIDANCE: {hint}'
                 break
+
+        # Retrieve AOSP/Automotive domain facts (native crashes, VHAL, SELinux,
+        # binder, etc.) that _ERROR_HINTS (Java-exception-only) does not cover.
+        domain = knowledge_pack.retrieve_context(exception_type + "\n" + text)
+        if domain:
+            extra_hint = f'\n\n{domain}{extra_hint}'
 
         source_section = ''
         if source_snippet:

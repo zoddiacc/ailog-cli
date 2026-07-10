@@ -5,6 +5,8 @@ Instant, free — no AI calls. Maps common log patterns to plain-English descrip
 
 import re
 
+from . import knowledge_pack
+
 # (compiled_regex, hint_template) — template can use {0}, {1}... for capture groups
 _HINT_RULES = [
     # --- App lifecycle ---
@@ -86,6 +88,12 @@ _HINT_RULES = [
 
 def get_hint(line: str) -> str:
     """Return a human-readable hint for a log line, or empty string if no match."""
+    # Domain-specific AOSP/Automotive knowledge takes priority over generic rules —
+    # it's more precise and always correct (no AI involved).
+    domain_hint = knowledge_pack.lookup_hint(line)
+    if domain_hint:
+        return domain_hint
+
     for pattern, template in _HINT_RULES:
         m = pattern.search(line)
         if m:
