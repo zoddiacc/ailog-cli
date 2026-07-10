@@ -1,7 +1,107 @@
 """Tests for logcat_wrapper module — crash metadata parsing and helpers."""
 
+import os
+import threading
 import unittest
-from src.ailog.logcat_wrapper import LogcatWrapper
+from unittest.mock import MagicMock
+from src.ailog.logcat_wrapper import LogcatWrapper, _PACKAGE_RE, _SERIAL_RE
+
+
+class _Cfg:
+    provider = 'ollama'
+    dry_run = False
+    show_tokens = False
+    redact = None
+
+    def get(self, k, d=None):
+        return {'max_ai_calls': 5, 'timeout': 30, 'system_prompt': ''}.get(k, d)
+
+    def get_api_key(self):
+        return ''
+
+    def get_model(self):
+        return 'test-model'
+
+    def get_base_url(self):
+        return 'http://localhost:11434'
+
+
+def _wrapper(max_calls=5):
+    w = LogcatWrapper(_Cfg(), MagicMock())
+    w.max_ai_calls = max_calls
+    return w
+
+
+class TestReserveAiCall(unittest.TestCase):
+    """The AI budget must be atomic across the timer and main threads."""
+
+    def test_never_exceeds_budget_under_concurrency(self):
+        w = _wrapper(max_calls=50)
+        reserved = []
+
+        def worker():
+            for _ in range(100):
+                if w._reserve_ai_call():
+                    reserved.append(1)
+
+        threads = [threading.Thread(target=worker) for _ in range(8)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        self.assertEqual(len(reserved), 50)   # exactly the budget, never more
+        self.assertEqual(w._ai_calls, 50)
+
+    def test_returns_false_when_exhausted(self):
+        w = _wrapper(max_calls=1)
+        self.assertTrue(w._reserve_ai_call())
+        self.assertFalse(w._reserve_ai_call())
+
+
+class TestSafeFixTarget(unittest.TestCase):
+    def test_rejects_non_source_extension(self):
+        w = _wrapper()
+        self.assertFalse(w._is_safe_fix_target('build.gradle.properties.txt'))
+
+    def test_rejects_path_outside_cwd(self):
+        w = _wrapper()
+        self.assertFalse(w._is_safe_fix_target('/etc/passwd'))
+        self.assertFalse(w._is_safe_fix_target('../../secret.kt'))
+
+    def test_accepts_source_in_cwd(self):
+        w = _wrapper()
+        path = os.path.join(os.getcwd(), 'src', 'Main.kt')
+        self.assertTrue(w._is_safe_fix_target(path))
+
+
+class TestInputValidationRegexes(unittest.TestCase):
+    def test_valid_package(self):
+        self.assertTrue(_PACKAGE_RE.match('com.example.my_app'))
+
+    def test_rejects_injection_package(self):
+        self.assertIsNone(_PACKAGE_RE.match('foo; reboot'))
+        self.assertIsNone(_PACKAGE_RE.match('$(rm -rf /)'))
+        self.assertIsNone(_PACKAGE_RE.match('-flag'))
+
+    def test_valid_serial(self):
+        self.assertTrue(_SERIAL_RE.match('emulator-5554'))
+        self.assertTrue(_SERIAL_RE.match('192.168.1.5:5555'))
+
+    def test_rejects_injection_serial(self):
+        self.assertIsNone(_SERIAL_RE.match('a b; rm'))
+        self.assertIsNone(_SERIAL_RE.match('$(id)'))
+
+
+class TestMethodMetadata(unittest.TestCase):
+    def test_method_is_full_class(self):
+        lines = [
+            "E AndroidRuntime: FATAL EXCEPTION: main",
+            "E AndroidRuntime: \tat com.oem.dash.Main.onCreate(Main.kt:10)",
+        ]
+        meta = LogcatWrapper._parse_crash_metadata(lines)
+        self.assertEqual(meta['method'], 'com.oem.dash.Main.onCreate')
+        self.assertEqual(meta['location'], 'Main.kt:10')
 
 
 class TestParseCrashMetadata(unittest.TestCase):
