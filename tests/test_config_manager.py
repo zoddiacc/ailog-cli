@@ -151,6 +151,55 @@ class TestValidation(TempConfigMixin, unittest.TestCase):
         cm.set_base_url("https://api.example.com/v1")
         self.assertEqual(cm.get_base_url(), "https://api.example.com/v1")
 
+    def test_openai_http_url_rejected(self):
+        cm = ConfigManager()
+        cm.set_provider("openai")
+        with self.assertRaises(ValueError):
+            cm.set_base_url("http://api.example.com/v1")  # cleartext key
+
+    def test_openai_http_localhost_allowed(self):
+        cm = ConfigManager()
+        cm.set_provider("openai")
+        cm.set_base_url("http://localhost:1234/v1")  # local proxy is fine
+        self.assertIn("localhost", cm.get_base_url())
+
+
+class TestSetOption(TempConfigMixin, unittest.TestCase):
+    def test_sets_int_key(self):
+        cm = ConfigManager()
+        cm.set_option("batch_interval", "10")
+        self.assertEqual(cm.get("batch_interval"), 10)
+
+    def test_rejects_unknown_key(self):
+        cm = ConfigManager()
+        with self.assertRaises(ValueError):
+            cm.set_option("totally_made_up", "x")
+
+    def test_rejects_bad_int(self):
+        cm = ConfigManager()
+        with self.assertRaises(ValueError):
+            cm.set_option("max_ai_calls", "notanumber")
+
+    def test_rejects_out_of_range_int(self):
+        cm = ConfigManager()
+        with self.assertRaises(ValueError):
+            cm.set_option("timeout", "0")
+
+    def test_rejects_bad_noise_level(self):
+        cm = ConfigManager()
+        with self.assertRaises(ValueError):
+            cm.set_option("noise_level", "extreme")
+
+    def test_api_key_not_settable_this_way(self):
+        cm = ConfigManager()
+        with self.assertRaises(ValueError):
+            cm.set_option("openai_api_key", "sk-secret")
+
+    def test_provider_via_set_option(self):
+        cm = ConfigManager()
+        cm.set_option("provider", "anthropic")
+        self.assertEqual(cm.provider, "anthropic")
+
 
 class TestApiKey(TempConfigMixin, unittest.TestCase):
     def test_ollama_no_key_needed(self):

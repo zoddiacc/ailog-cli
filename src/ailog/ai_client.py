@@ -86,33 +86,6 @@ Format your response with clear sections:
 Keep the total response under 400 words unless the issue is truly complex."""
 
 
-NOISE_FILTER_PROMPT = """You are a log filter for Android/AOSP development.
-Given a batch of log lines, return ONLY the important ones.
-
-Remove:
-- Verbose Binder transaction logs
-- HAL polling heartbeats
-- Routine GC logs
-- Standard service startup messages (unless they fail)
-- Repetitive identical lines (show first + count)
-- Debug logs from framework internals that aren't errors
-- Audio/media routine state changes
-- Routine property set/get logs
-
-Keep:
-- ALL errors and exceptions
-- ALL warnings that indicate actual issues
-- Stack traces (full)
-- Build failures
-- Service crashes or ANRs
-- VHAL/CarService errors
-- Memory/permission errors
-- First occurrence of repeated patterns
-
-Respond with JSON: {"kept": ["line1", "line2", ...], "filtered_count": N, "patterns": ["repeated pattern summary"]}
-Return ONLY valid JSON, no other text."""
-
-
 class AIClient:
     """Multi-provider AI client with unified interface."""
 
@@ -358,17 +331,6 @@ class AIClient:
         focus_hint = f"Focus especially on issues related to: {focus}\n\n" if focus else ""
         prompt = f"{domain}{focus_hint}Analyze these Android logcat lines:\n\n```\n{text}\n```"
         return self.chat(self._system_prompt, prompt)
-
-    def filter_noise(self, log_lines):
-        """Filter noise from log lines. Returns dict with kept lines and stats."""
-        text = "\n".join(log_lines)
-        prompt = f"Filter these Android log lines:\n\n{text}"
-
-        try:
-            raw = self.chat(NOISE_FILTER_PROMPT, prompt, max_tokens=2000)
-            return json.loads(_strip_code_fences(raw))
-        except (json.JSONDecodeError, KeyError):
-            return {"kept": log_lines, "filtered_count": 0, "patterns": []}
 
     # Error-type-specific extra context to guide the AI
     _ERROR_HINTS = {

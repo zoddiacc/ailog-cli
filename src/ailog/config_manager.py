@@ -126,7 +126,6 @@ class ConfigManager:
         elif provider == "anthropic":
             self._config["anthropic_api_key"] = key
         self._save()
-        self._plaintext_warning = True
 
     def get_model(self):
         """Get model for current provider."""
@@ -150,6 +149,17 @@ class ConfigManager:
             raise ValueError("Invalid URL: must start with http:// or https://")
         if not parsed.hostname:
             raise ValueError("Invalid URL: missing hostname")
+
+    @staticmethod
+    def _validate_openai_url(url):
+        """OpenAI base URL carries a Bearer API key, so require https off-localhost."""
+        parsed = urllib.parse.urlparse(url)
+        host = parsed.hostname or ''
+        if parsed.scheme != 'https' and host not in ('localhost', '127.0.0.1', '::1'):
+            raise ValueError(
+                "OpenAI base URL must use https:// (an http URL would send your API "
+                "key in cleartext). http is only allowed for localhost."
+            )
 
     def set_model(self, model):
         """Set model for current provider."""
@@ -177,9 +187,50 @@ class ConfigManager:
         if provider == "ollama":
             self._config["ollama_url"] = url.rstrip("/")
         elif provider == "openai":
+            self._validate_openai_url(url)
             self._config["openai_url"] = url.rstrip("/")
         elif provider == "anthropic":
             pass  # Anthropic URL is fixed
+        self._save()
+
+    # Keys settable via `ailog config --set key=value`, with a value coercer.
+    _SETTABLE = {
+        'provider': str, 'ollama_url': str, 'ollama_model': str,
+        'openai_url': str, 'openai_model': str, 'anthropic_model': str,
+        'noise_level': str, 'batch_interval': int, 'max_ai_calls': int,
+        'timeout': int, 'system_prompt': str,
+    }
+
+    def set_option(self, key, value):
+        """Set a config key from a raw string value, with validation/coercion.
+
+        Backs `ailog config --set key=value`. Rejects unknown keys and bad values.
+        (API keys are intentionally not settable this way — use --api-key.)
+        """
+        if key not in self._SETTABLE:
+            raise ValueError(
+                f"Unknown setting '{key}'. Settable keys: "
+                f"{', '.join(sorted(self._SETTABLE))}"
+            )
+        caster = self._SETTABLE[key]
+        try:
+            coerced = caster(value)
+        except (TypeError, ValueError):
+            raise ValueError(f"Invalid value for {key}: expected {caster.__name__}")
+
+        if key == 'provider':
+            self.set_provider(coerced)
+            return
+        if key == 'noise_level' and coerced not in ('low', 'medium', 'high'):
+            raise ValueError("noise_level must be one of: low, medium, high")
+        if key in ('batch_interval', 'max_ai_calls', 'timeout') and coerced < 1:
+            raise ValueError(f"{key} must be >= 1")
+        if key.endswith('_url'):
+            self._validate_url(coerced)
+            if key == 'openai_url':
+                self._validate_openai_url(coerced)
+            coerced = coerced.rstrip('/')
+        self._config[key] = coerced
         self._save()
 
     def show(self, display):

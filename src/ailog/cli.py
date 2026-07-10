@@ -116,6 +116,9 @@ def main():
                                help='Set custom base URL for current provider')
     config_parser.add_argument('--list-models', action='store_true',
                                help='List available models (Ollama only)')
+    config_parser.add_argument('--set', metavar='KEY=VALUE', dest='set_option',
+                               help='Set any config key (e.g. --set batch_interval=10, '
+                                    '--set noise_level=high)')
     config_parser.add_argument('--reset', action='store_true',
                                help='Reset to defaults')
 
@@ -176,12 +179,31 @@ def handle_config(args, config, display):
             return
 
     if args.api_key:
-        config.set_api_key(args.api_key)
-        display.success(f"API key saved for {config.provider}")
-        display.warning(
-            "API key stored in plaintext in config file (permissions 0600). "
-            "For extra security, use env vars: OPENAI_API_KEY or ANTHROPIC_API_KEY"
-        )
+        if config.provider == 'ollama':
+            display.warning(
+                "Ollama does not use an API key — nothing was saved. "
+                "Switch provider first: ailog config --provider openai"
+            )
+        else:
+            config.set_api_key(args.api_key)
+            display.success(f"API key saved for {config.provider}")
+            display.warning(
+                "API key stored in plaintext in config file (permissions 0600). "
+                "For extra security, use env vars: OPENAI_API_KEY or ANTHROPIC_API_KEY"
+            )
+        actions_taken = True
+
+    if args.set_option:
+        if '=' not in args.set_option:
+            display.error("--set expects KEY=VALUE (e.g. --set batch_interval=10)")
+            return
+        key, value = args.set_option.split('=', 1)
+        try:
+            config.set_option(key.strip(), value.strip())
+            display.success(f"Set {key.strip()} = {value.strip()}")
+        except ValueError as e:
+            display.error(str(e))
+            return
         actions_taken = True
 
     if args.model:

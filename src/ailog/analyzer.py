@@ -172,7 +172,7 @@ class BatchAnalyzer:
 
             self.display.section(f'Chunk {i + 1}/{len(chunks)}')
 
-            # Fixed: proper error detection in chunks (was broken with `any()` + display._c)
+            # Only spend an AI call on chunks that actually contain errors.
             has_errors = any(
                 'error' in line.lower() or 'exception' in line.lower() or 'failed' in line.lower()
                 for line in chunk

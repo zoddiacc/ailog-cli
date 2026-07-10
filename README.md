@@ -192,6 +192,7 @@ ailog config --api-key sk-xxx    # Set API key
 ailog config --model <name>      # Set model
 ailog config --base-url <url>    # Custom base URL
 ailog config --list-models       # List available Ollama models
+ailog config --set KEY=VALUE     # Set any config key (e.g. --set noise_level=high)
 ailog config --reset             # Reset to defaults
 ```
 
@@ -207,9 +208,13 @@ Config file: `~/.config/ailog/config.json`
 | `openai_url` | `https://api.openai.com/v1` | OpenAI-compatible base URL |
 | `openai_model` | `gpt-4o-mini` | OpenAI model |
 | `anthropic_model` | `claude-sonnet-4-20250514` | Anthropic model |
-| `noise_level` | `medium` | Default noise filter level |
+| `noise_level` | `medium` | Default noise filter level (low/medium/high) |
 | `batch_interval` | `5` | Seconds between AI batches |
 | `max_ai_calls` | `5` | Max AI calls per session |
+| `timeout` | `30` | AI request timeout (seconds) |
+| `system_prompt` | `""` | Override the AI system prompt (empty = built-in) |
+
+Any of these can be set with `ailog config --set key=value`.
 
 API keys can also be set via environment variables: `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`.
 

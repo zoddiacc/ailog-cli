@@ -203,10 +203,18 @@ BUILD_NOISE = [
     r'^\[.*\] Processing.*',
 ]
 
-# Compile regexes once
-_NOISE_RE = [re.compile(p) for p in ALWAYS_NOISE]
-_KEEP_RE = [re.compile(p) for p in ALWAYS_KEEP]
-_BUILD_NOISE_RE = [re.compile(p) for p in BUILD_NOISE]
+# Combine each pattern list into a single alternation regex, compiled once.
+# This turns up to ~130 sequential .search() calls per log line into three,
+# which matters on chatty devices (thousands of lines/sec).
+def _combine(patterns):
+    if not patterns:
+        return re.compile(r'(?!)')  # matches nothing
+    return re.compile('|'.join(f'(?:{p})' for p in patterns))
+
+
+_NOISE_RE = _combine(ALWAYS_NOISE)
+_KEEP_RE = _combine(ALWAYS_KEEP)
+_BUILD_NOISE_RE = _combine(BUILD_NOISE)
 
 
 class NoiseFilter:
@@ -218,25 +226,16 @@ class NoiseFilter:
 
     def is_important(self, line: str) -> bool:
         """Check if a line should always be kept."""
-        for pattern in _KEEP_RE:
-            if pattern.search(line):
-                return True
-        return False
+        return bool(_KEEP_RE.search(line))
 
     def is_noise(self, line: str) -> bool:
         """Check if a line is always noise."""
         if not line.strip():
             return True
-        for pattern in _NOISE_RE:
-            if pattern.search(line):
-                return True
-        return False
+        return bool(_NOISE_RE.search(line))
 
     def is_build_noise(self, line: str) -> bool:
-        for pattern in _BUILD_NOISE_RE:
-            if pattern.search(line):
-                return True
-        return False
+        return bool(_BUILD_NOISE_RE.search(line))
 
     def filter_batch(self, lines: List[str], mode: str = 'logcat') -> Tuple[List[str], int]:
         """
