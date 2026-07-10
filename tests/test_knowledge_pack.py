@@ -101,6 +101,42 @@ class TestFindMatches(unittest.TestCase):
         self.assertLessEqual(len(kp.find_matches(blob, limit=2)), 2)
 
 
+class TestVhalPropertyTable(unittest.TestCase):
+    def test_property_table_non_empty(self):
+        self.assertGreater(len(kp.VHAL_PROPERTIES), 20)
+
+    def test_property_values_well_formed(self):
+        for name, val in kp.VHAL_PROPERTIES.items():
+            self.assertEqual(len(val), 2, f"{name}: expected (short, guidance)")
+            short, guidance = val
+            self.assertTrue(short.strip(), f"{name}: empty short")
+            self.assertGreater(len(guidance), 40, f"{name}: guidance too short")
+
+    def test_property_referenced_in_log_matches(self):
+        line = 'E VehicleHal: get(HVAC_TEMPERATURE_SET) failed NOT_AVAILABLE'
+        ids = [e.id for e in kp.find_matches(line)]
+        self.assertIn('vhal-prop-hvac_temperature_set', ids)
+
+    def test_longest_name_wins(self):
+        # PERF_VEHICLE_SPEED_DISPLAY must not be shadowed by PERF_VEHICLE_SPEED
+        names = kp._find_vhal_property_names('cluster shows PERF_VEHICLE_SPEED_DISPLAY jitter')
+        self.assertIn('PERF_VEHICLE_SPEED_DISPLAY', names)
+        self.assertNotIn('PERF_VEHICLE_SPEED', names)
+
+    def test_property_hint_reaches_no_ai_path(self):
+        hint = get_hint('W VehicleHal: PARKING_BRAKE_ON stuck true')
+        self.assertIn('PARKING_BRAKE_ON', hint)
+
+    def test_property_guidance_injected_into_context(self):
+        ctx = kp.retrieve_context('EV_CHARGE_PORT_CONNECTED reported false while charging')
+        self.assertIn('EV_CHARGE_PORT_CONNECTED', ctx)
+        self.assertIn('PERMISSION_ENERGY_PORTS', ctx)
+
+    def test_no_false_positive_on_plain_words(self):
+        # Lowercase / ordinary words must not match property names
+        self.assertEqual(kp._find_vhal_property_names('the door lock was fine'), [])
+
+
 class TestRetrieveContext(unittest.TestCase):
     def test_returns_block_with_guidance(self):
         ctx = kp.retrieve_context('avc: denied { read } scontext=u:r:x:s0 '
