@@ -13,7 +13,9 @@ By default the AI runs **locally via Ollama, so logs never leave your machine** 
 
 ## Features
 
-- **Automotive-aware**: Dedicated patterns for VHAL, CarService, CarAudio, EVS
+- **AOSP/Automotive knowledge pack**: A built-in library of verified facts — VHAL properties, SELinux denials, native tombstones, CarWatchdog, power/user HAL, binder — that explains automotive errors *without* relying on the model's own knowledge, so even a small local model gives good answers ([details below](#the-knowledge-pack--how-small-models-punch-above-their-weight))
+- **Bugreport triage**: Point `ailog bugreport` at a giant `adb bugreport` and get a ranked list of crashes, ANRs, native tombstones, watchdog kills, and SELinux denials — each explained
+- **Automotive-aware**: Dedicated patterns for VHAL, CarService, CarAudio, EVS, CarWatchdog, power management
 - **AOSP build wrapper**: Wraps `m`/`make` with real-time error interpretation
 - **Local-first AI**: Ollama by default (logs stay on your machine); OpenAI-compatible APIs and Anthropic Claude optional
 - **Two-stage filtering**: Rule-based noise filter removes ~70% of lines before AI, saving tokens and time
@@ -29,11 +31,14 @@ By default the AI runs **locally via Ollama, so logs never leave your machine** 
 
 ## Installation
 
-| Platform | `analyze` | `cat` | `build` | Install method |
-|----------|-----------|-------|---------|----------------|
-| Linux    | Yes | Yes | Yes | `pip install ailog-cli` |
-| macOS    | Yes | Yes | Yes | `pip install ailog-cli` |
-| Windows  | Yes | Yes | No (AOSP builds are Linux/macOS only) | `pip install ailog-cli` |
+| Platform | `analyze` | `bugreport` | `cat` | `build` | Install method |
+|----------|-----------|-----------|-------|---------|----------------|
+| Linux    | Yes | Yes | Yes | Yes | `pip install ailog-cli` |
+| macOS    | Yes | Yes | Yes | Yes | `pip install ailog-cli` |
+| Windows  | Yes | Yes | Yes | No (AOSP builds are Linux/macOS only) | `pip install ailog-cli` |
+
+`analyze` and `bugreport` work on any log file/bugreport (no device or adb needed);
+`cat` needs `adb`; `build` needs a Linux/macOS AOSP tree.
 
 ### pip (Recommended)
 
@@ -197,18 +202,49 @@ API keys can also be set via environment variables: `OPENAI_API_KEY`, `ANTHROPIC
 ## How It Works
 
 ```
-Input (log file, adb logcat, or make output)
+Input (log file, adb logcat, bugreport, or make output)
          |
-Stage 1: Rule-Based Noise Filter (instant, free)
+Stage 1: Rule-Based Noise Filter (instant, free) — drops ~70% of lines
          |
-Stage 2: AI Analysis (only if errors detected, max 5 calls/session)
+Stage 2: Knowledge Pack lookup — matches known AOSP/Automotive signatures
+         |         ├─ produces an instant, always-correct hint (no AI needed)
+         |         └─ supplies verified facts as context for the AI step
+         |
+Stage 3: AI Analysis (only if errors detected) — explains the rest,
+         grounded in the facts from Stage 2
          |
 Terminal Display (color-coded lines, boxed AI analysis, stats bar)
 ```
 
+## The knowledge pack — how small models punch above their weight
+
+Most people running this tool use a **small local model** (the default is
+`qwen2.5-coder:3b`) that knows little about VHAL, CarService, SELinux, or native
+tombstones. A generic "pipe the log to an LLM" tool gives weak or wrong answers
+for automotive platform issues as a result.
+
+AILog fixes this by keeping the domain intelligence in **curated data it ships**,
+not in the model's weights. A built-in knowledge pack maps log signatures to
+verified facts (what a VHAL property means and which `Car.PERMISSION_*` it needs,
+how to read an `avc: denied` line, what a `SIGABRT` tombstone implies, and so on).
+It's used two ways:
+
+1. **Instant hints, no AI** — when a line matches a known signature, you get an
+   always-correct one-liner immediately. This works fully offline, which is why
+   `ailog bugreport --no-ai` is genuinely useful with no model at all.
+2. **Grounded AI answers** — the matching facts are injected into the AI prompt as
+   authoritative context, so a small local model *summarizes known-good knowledge*
+   instead of guessing.
+
+The pack currently covers ~35 error signatures plus ~80 VHAL properties across
+powertrain, energy/EV, HVAC, body, power management, user HAL, watchdog, cluster,
+and diagnostics — and it's pure data, so it grows without code changes.
+`tools/gen_vhal_knowledge.py` can extend the VHAL coverage straight from a
+`VehicleProperty.aidl` in an AOSP tree.
+
 ## Development
 
-**Testing**: AILog has 136 unit tests covering all major modules. Tests run in CI across Python 3.8, 3.9, 3.10, 3.11, and 3.12 via GitHub Actions, with ruff linting.
+**Testing**: AILog has an extensive unit-test suite covering all major modules. Tests run in CI across Python 3.8, 3.9, 3.10, 3.11, and 3.12 via GitHub Actions, with ruff linting.
 
 ```bash
 python3 -m unittest discover -s tests -v
