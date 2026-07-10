@@ -3,7 +3,10 @@
 All notable changes are documented here. This project follows
 [Keep a Changelog](https://keepachangelog.com/) conventions.
 
-## Unreleased
+## 2.1.0 — 2026-07-10
+
+A large feature + hardening release, and a repositioning around AOSP / Android
+Automotive platform development.
 
 ### Added
 - **AOSP/Automotive knowledge pack** (`knowledge_pack.py`): verified facts keyed by
@@ -14,26 +17,37 @@ All notable changes are documented here. This project follows
 - **`ailog bugreport`**: triage an `adb bugreport` (`.zip` or `.txt`) — extracts and
   explains Java crashes, native tombstones, ANRs, watchdog kills, and SELinux
   denials. `--no-ai` runs fully offline; `--focus` and `--output` supported.
+- **`--json`** output mode for `analyze` and `bugreport` (machine-readable, for CI).
+- **`ailog config --set key=value`** to set any config key without hand-editing JSON.
 - `tools/gen_vhal_knowledge.py`: generate VHAL knowledge entries from a
   `VehicleProperty.aidl` in an AOSP tree.
-- `--no-redact` flag; `dependabot.yml` for GitHub Actions.
+- `--no-redact` flag; `dependabot.yml` and a CI coverage job.
 
 ### Changed
 - Secret redaction now defaults **on for cloud providers** (off for local Ollama),
   covering log content and source files sent to the AI.
 - Repositioned for AOSP/Android Automotive platform developers (README, PyPI metadata).
 - Minimum Python is now 3.9; CI tests through 3.14.
+- Noise filter combines its pattern lists into single regexes (~130 searches per
+  line down to a few) for a large speedup on chatty devices.
 
 ### Fixed
 - **Security:** terminal escape-sequence injection from attacker-controlled log
   lines/AI output (now sanitized before display); config file written atomically at
   0600 (no world-readable window); expanded secret-redaction patterns
-  (Authorization/Bearer, JWT, AWS, Slack, Stripe, GitHub, GitLab, PEM, URL creds).
+  (Authorization/Bearer, JWT, AWS, Slack, Stripe, GitHub, GitLab, PEM, URL creds);
+  auto-fix confined to source files inside the project; `--package`/`--device`
+  validated before `adb shell`; OpenAI base URLs must be https off-localhost;
+  reports written 0700/0600.
 - `ailog build` now correctly invokes AOSP's `m` (a shell function) via
   `bash -c 'source build/envsetup.sh && m …'`.
 - Commands propagate real exit codes (failed build/analyze no longer exit 0).
-- Auto-fix strips markdown fences so AI output can't corrupt source files.
+- Auto-fix strips markdown fences so AI output can't corrupt source files; all
+  source/report I/O is UTF-8.
+- Thread-safe AI-call budget in logcat streaming (no overshoot; timer joined on exit).
 - Read-timeout no longer crashes on Python 3.9 (`socket.timeout` handled).
+- Release workflow gated on tests + tag/version match, least-privilege permissions,
+  SHA-pinned third-party actions.
 
 ## 2.0.3 — 2026-04-22
 
