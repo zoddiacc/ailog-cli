@@ -5,7 +5,7 @@
 Please **do not open a public issue** for security vulnerabilities.
 
 Instead, report privately via GitHub's
-[private vulnerability reporting](https://github.com/zoddiacc/AILog/security/advisories/new)
+[private vulnerability reporting](https://github.com/zoddiacc/ailog-cli/security/advisories/new)
 (Security → Report a vulnerability). If that is unavailable, email
 **sanjayjithm@gmail.com** with details and steps to reproduce.
 
