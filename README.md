@@ -30,23 +30,13 @@ pip install ailog-cli
 
 Turn a 100 MB bugreport into a ranked list of real problems — instantly, with no model needed:
 
-```console
-$ ailog bugreport bugreport-car-2026.zip --no-ai
+![ailog bugreport triaging an Android Automotive bugreport: native crash, Java crash, ANR and SELinux denials extracted and explained in seconds, offline](https://raw.githubusercontent.com/zoddiacc/ailog-cli/master/docs/demo/demo.gif)
 
-═════════════════ AILog — Bugreport Triage ═════════════════
-ℹ️  Build fingerprint: Android/car_x86_64/emu:14/UQ1A.240101
-   java crashes: 1  │  native crashes: 1  │  ANRs: 1  │  SELinux: 1
+Try it yourself on the bundled sample — no device required:
 
-▶ 1. [NATIVE] Native crash — signal 6 (SIGABRT)
-   ↳ [Native crash] SIGABRT means abort() — often a failed CHECK/assert.
-     Read the 'abort message:' line first, then symbolize the backtrace.
-
-▶ 2. [ANR] ANR in com.oem.telemetry
-   ↳ App Not Responding: com.oem.telemetry
-
-▶ SELinux denials (1 unique)
-   ↳ [SELinux] Denied — add an allow rule to the domain's .te file
-     u:r:hal_vehicle_default:s0 → u:object_r:sysfs:s0 : file { read }
+```bash
+git clone https://github.com/zoddiacc/ailog-cli.git
+ailog bugreport ailog-cli/docs/demo/bugreport-car-demo.zip --no-ai
 ```
 
 Add a model and it explains each crash in depth. Point it at a live device
