@@ -16,7 +16,7 @@ DEFAULT_CONFIG = {
     "openai_api_key": "",
     "openai_model": "gpt-4o-mini",
     "anthropic_api_key": "",
-    "anthropic_model": "claude-sonnet-4-20250514",
+    "anthropic_model": "claude-sonnet-5",
     "noise_level": "medium",
     "batch_interval": 5,
     "max_ai_calls": 5,
