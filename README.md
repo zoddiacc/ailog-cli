@@ -1,6 +1,6 @@
 # AILog — AI Log Triage for AOSP & Android Automotive
 
-[![Tests](https://github.com/zoddiacc/AILog/actions/workflows/test.yml/badge.svg)](https://github.com/zoddiacc/AILog/actions/workflows/test.yml)
+[![Tests](https://github.com/zoddiacc/ailog-cli/actions/workflows/test.yml/badge.svg)](https://github.com/zoddiacc/ailog-cli/actions/workflows/test.yml)
 [![PyPI](https://img.shields.io/pypi/v/ailog-cli)](https://pypi.org/project/ailog-cli/)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -20,6 +20,9 @@ terminal.
 ```bash
 pip install ailog-cli
 ```
+
+> **Note:** the PyPI package is **`ailog-cli`**, but the command you run is **`ailog`**.
+> (The name `ailog` on PyPI belongs to an unrelated project — don't install that one.)
 
 ---
 
@@ -53,7 +56,7 @@ Add a model and it explains each crash in depth. Point it at a live device
 
 ## Get started in 60 seconds
 
-**1. Install**
+**1. Install** — the package is `ailog-cli`, the command is `ailog`:
 
 ```bash
 pip install ailog-cli
@@ -238,7 +241,7 @@ before anything is sent. Pass `--no-redact` only if you understand the implicati
 <summary><b>Install from source</b></summary>
 
 ```bash
-git clone https://github.com/zoddiacc/AILog.git && cd AILog
+git clone https://github.com/zoddiacc/ailog-cli.git && cd AILog
 bash install.sh                 # installs to ~/.local/bin
 # or run directly without installing:
 python3 run.py --help

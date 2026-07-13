@@ -31,10 +31,10 @@ classifiers = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/zoddiacc/AILog"
-Repository = "https://github.com/zoddiacc/AILog"
-Issues = "https://github.com/zoddiacc/AILog/issues"
-Changelog = "https://github.com/zoddiacc/AILog/blob/master/CHANGELOG.md"
+Homepage = "https://github.com/zoddiacc/ailog-cli"
+Repository = "https://github.com/zoddiacc/ailog-cli"
+Issues = "https://github.com/zoddiacc/ailog-cli/issues"
+Changelog = "https://github.com/zoddiacc/ailog-cli/blob/master/CHANGELOG.md"
 
 [project.scripts]
 ailog = "ailog.cli:main"
