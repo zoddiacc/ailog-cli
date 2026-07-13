@@ -3,6 +3,21 @@
 All notable changes are documented here. This project follows
 [Keep a Changelog](https://keepachangelog.com/) conventions.
 
+## 2.1.2 — 2026-07-13
+
+### Changed
+- Renamed the GitHub repository `AILog` → `ailog-cli` to match the PyPI package
+  name (old URLs redirect). All project links updated.
+- Default Anthropic model bumped `claude-sonnet-4-20250514` → `claude-sonnet-5`
+  (the old model is deprecated upstream). Existing configs keep their saved
+  value — run `ailog config --set anthropic_model=claude-sonnet-5` to update.
+
+### Fixed
+- README: clarified that the PyPI package is `ailog-cli` while the command is
+  `ailog` (and that `pip install ailog` installs an unrelated project); fixed
+  the install-from-source `cd` path after the repo rename.
+- UNINSTALL.md now covers `pip uninstall ailog-cli` (the primary install path).
+
 ## 2.1.1 — 2026-07-10
 
 ### Changed

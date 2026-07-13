@@ -28,7 +28,7 @@ rm -rf ~/.local/share/ailog
 rm -rf ~/.config/ailog
 ```
 
-If you cloned the repo, delete the `AILog/` directory as well.
+If you cloned the repo, delete the `ailog-cli/` directory as well.
 
 ## Windows
 

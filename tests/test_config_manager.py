@@ -82,7 +82,7 @@ class TestProviderSwitching(TempConfigMixin, unittest.TestCase):
         cm = ConfigManager()
         cm.set_provider("anthropic")
         self.assertEqual(cm.provider, "anthropic")
-        self.assertEqual(cm.get_model(), "claude-sonnet-4-20250514")
+        self.assertEqual(cm.get_model(), "claude-sonnet-5")
 
     def test_invalid_provider_raises(self):
         cm = ConfigManager()

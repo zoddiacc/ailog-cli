@@ -205,7 +205,7 @@ precedence.
 | `ollama_url` | `http://localhost:11434` | Ollama server URL |
 | `openai_model` | `gpt-4o-mini` | OpenAI model |
 | `openai_url` | `https://api.openai.com/v1` | OpenAI-compatible base URL |
-| `anthropic_model` | `claude-sonnet-4-20250514` | Anthropic model |
+| `anthropic_model` | `claude-sonnet-5` | Anthropic model |
 | `noise_level` | `medium` | Filter aggressiveness: `low`/`medium`/`high` |
 | `batch_interval` | `5` | Seconds between AI batches (live `cat`) |
 | `max_ai_calls` | `5` | Max AI calls per session |
@@ -241,7 +241,7 @@ before anything is sent. Pass `--no-redact` only if you understand the implicati
 <summary><b>Install from source</b></summary>
 
 ```bash
-git clone https://github.com/zoddiacc/ailog-cli.git && cd AILog
+git clone https://github.com/zoddiacc/ailog-cli.git && cd ailog-cli
 bash install.sh                 # installs to ~/.local/bin
 # or run directly without installing:
 python3 run.py --help
