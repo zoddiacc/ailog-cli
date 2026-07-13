@@ -3,7 +3,7 @@
 All notable changes are documented here. This project follows
 [Keep a Changelog](https://keepachangelog.com/) conventions.
 
-## Unreleased
+## 2.2.0 — 2026-07-13
 
 ### Added
 - Knowledge pack grew 35 → 52 error signatures and 82 → 123 VHAL properties.
