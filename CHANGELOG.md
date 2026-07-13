@@ -3,6 +3,14 @@
 All notable changes are documented here. This project follows
 [Keep a Changelog](https://keepachangelog.com/) conventions.
 
+## 2.2.1 — 2026-07-13
+
+### Changed
+- README now opens with an animated demo GIF of `ailog bugreport --no-ai`
+  (docs-only release so the PyPI page picks it up). A sample automotive
+  bugreport is bundled at `docs/demo/bugreport-car-demo.zip` to try the tool
+  with no device.
+
 ## 2.2.0 — 2026-07-13
 
 ### Added
