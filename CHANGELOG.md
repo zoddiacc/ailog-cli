@@ -3,6 +3,20 @@
 All notable changes are documented here. This project follows
 [Keep a Changelog](https://keepachangelog.com/) conventions.
 
+## Unreleased
+
+### Added
+- Knowledge pack grew 35 → 52 error signatures and 82 → 123 VHAL properties.
+  New signature coverage: ANR triggers (input dispatch, broadcast, service
+  timeouts), main-thread health (slow dispatch, StrictMode), runtime faults
+  (CheckJNI aborts, fdsan double-close), HAL/VINTF boot issues (unregistered
+  HAL waits, compatibility-matrix mismatches, dm-verity), package/ART failures
+  (INSTALL_FAILED_*, dexopt, apexd), API-check build failures, and automotive
+  UX (driving-state restrictions, activity blocking, occupant zones). New VHAL
+  properties: ADAS (cruise control, AEB, FCW, LDW, LKA, blind spot), wipers,
+  interior/exterior light switches, mirrors, regen braking, display units, and
+  more HVAC/seat/info properties.
+
 ## 2.1.2 — 2026-07-13
 
 ### Changed

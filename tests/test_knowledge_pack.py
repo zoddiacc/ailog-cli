@@ -75,6 +75,63 @@ class TestFindMatches(unittest.TestCase):
         line = 'E VehicleHal: requires android.car.permission.CONTROL_CAR_ENERGY'
         self.assertIn('vhal-permission', [e.id for e in kp.find_matches(line)])
 
+    def test_ux_restrictions_matches(self):
+        line = 'D CarUxRestrictionsManagerService: restrictions changed: requiresDO=true'
+        self.assertIn('car-ux-restrictions', [e.id for e in kp.find_matches(line)])
+
+    def test_activity_blocked_matches(self):
+        line = 'I ActivityBlockingActivity: Blocking com.example.app/.VideoActivity'
+        self.assertIn('car-activity-blocked', [e.id for e in kp.find_matches(line)])
+
+    def test_occupant_zone_matches(self):
+        line = 'E CarOccupantZoneService: no display assigned for occupant zone 2'
+        self.assertIn('car-occupant-zone', [e.id for e in kp.find_matches(line)])
+
+    def test_input_dispatch_anr_matches(self):
+        line = ('E ActivityManager: Input dispatching timed out '
+                '(Waiting to send non-key event because the touched window has not finished)')
+        self.assertIn('anr-input-dispatch', [e.id for e in kp.find_matches(line)])
+
+    def test_broadcast_timeout_matches(self):
+        line = 'W BroadcastQueue: Timeout of broadcast BroadcastRecord{abc u0 android.intent.action.BOOT_COMPLETED}'
+        self.assertIn('anr-broadcast-timeout', [e.id for e in kp.find_matches(line)])
+
+    def test_slow_dispatch_matches(self):
+        line = 'W Looper: Slow dispatch took 3212ms android.fg h=android.os.Handler c=... m=0'
+        self.assertIn('slow-main-thread', [e.id for e in kp.find_matches(line)])
+
+    def test_jni_error_matches(self):
+        line = 'F art: JNI DETECTED ERROR IN APPLICATION: use of deleted local reference 0x75'
+        self.assertIn('jni-error', [e.id for e in kp.find_matches(line)])
+
+    def test_fdsan_matches(self):
+        line = ("E fdsan: attempted to close file descriptor 42, expected to be unowned, "
+                "actually owned by unique_fd 0x7b0")
+        self.assertIn('fdsan-error', [e.id for e in kp.find_matches(line)])
+
+    def test_hal_service_wait_matches(self):
+        for line in [
+            'I ServiceManagement: Waited one second for android.hardware.automotive.vehicle@2.0::IVehicle/default',
+            'I ServiceManager: Waited 5000ms for android.hardware.automotive.vehicle.IVehicle/default',
+        ]:
+            self.assertIn('hal-service-wait', [e.id for e in kp.find_matches(line)], line)
+
+    def test_vintf_matches(self):
+        line = 'E init: Check vintf compatibility failed: checkvintf found errors'
+        self.assertIn('vintf-incompatible', [e.id for e in kp.find_matches(line)])
+
+    def test_install_failed_matches(self):
+        line = 'Failure [INSTALL_FAILED_VERSION_DOWNGRADE]'
+        self.assertIn('install-failed', [e.id for e in kp.find_matches(line)])
+
+    def test_apexd_matches(self):
+        line = 'E apexd: Failed to activate /data/apex/active/com.android.art@331413030.apex'
+        self.assertIn('apexd-fail', [e.id for e in kp.find_matches(line)])
+
+    def test_api_check_matches(self):
+        line = 'error: Aborting: Found compatibility problems checking the public API'
+        self.assertIn('api-check-failed', [e.id for e in kp.find_matches(line)])
+
     def test_no_match_on_plain_text(self):
         self.assertEqual(kp.find_matches('D ActivityManager: Displayed com.foo/.Main'), [])
 
@@ -84,6 +141,11 @@ class TestFindMatches(unittest.TestCase):
             'I ActivityManager: Start proc 1234:com.example/u0a10',
             'D WifiService: Connected to network',
             'V ViewRootImpl: draw finished',
+            'I PackageManager: Package com.example.app installed for user 10',
+            'D BluetoothAdapter: isLeEnabled(): ON',
+            'I Choreographer: Skipped 3 frames',
+            'W Looper: PerfMonitor doFrame: time=18ms',
+            'I chatty: uid=1000 system_server expire 5 lines',
         ]:
             self.assertEqual(kp.find_matches(benign), [], benign)
 
@@ -135,6 +197,22 @@ class TestVhalPropertyTable(unittest.TestCase):
     def test_no_false_positive_on_plain_words(self):
         # Lowercase / ordinary words must not match property names
         self.assertEqual(kp._find_vhal_property_names('the door lock was fine'), [])
+
+    def test_adas_property_matches(self):
+        line = 'E CarPropertyService: subscribe CRUISE_CONTROL_STATE failed: permission'
+        ids = [e.id for e in kp.find_matches(line)]
+        self.assertIn('vhal-prop-cruise_control_state', ids)
+
+    def test_wiper_property_matches(self):
+        ctx = kp.retrieve_context('W VehicleHal: WINDSHIELD_WIPERS_SWITCH set rejected')
+        self.assertIn('WINDSHIELD_WIPERS_SWITCH', ctx)
+        self.assertIn('CONTROL_WINDSHIELD_WIPERS', ctx)
+
+    def test_switch_state_pair_distinct(self):
+        # HEADLIGHTS_SWITCH must not be shadowed by HEADLIGHTS_STATE or vice versa
+        names = kp._find_vhal_property_names('HEADLIGHTS_SWITCH set while HEADLIGHTS_STATE off')
+        self.assertIn('HEADLIGHTS_SWITCH', names)
+        self.assertIn('HEADLIGHTS_STATE', names)
 
 
 class TestRetrieveContext(unittest.TestCase):

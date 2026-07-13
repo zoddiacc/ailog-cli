@@ -282,8 +282,9 @@ line, what a `SIGABRT` tombstone implies), used two ways:
    authoritative context, so a small local model summarizes known-good knowledge
    instead of guessing.
 
-It currently covers **35+ error signatures** and **80+ VHAL properties** (powertrain,
-energy/EV, HVAC, body, power/user HAL, watchdog, cluster, diagnostics). It's pure data,
+It currently covers **50+ error signatures** and **120+ VHAL properties** (powertrain,
+energy/EV, HVAC, body, lights, wipers, ADAS, power/user HAL, watchdog, cluster,
+diagnostics). It's pure data,
 so it grows without code changes — and `tools/gen_vhal_knowledge.py` can generate VHAL
 entries straight from a `VehicleProperty.aidl` in an AOSP tree.
 

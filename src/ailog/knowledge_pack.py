@@ -240,6 +240,40 @@ KNOWLEDGE = [
         'brought up early enough in init.',
     ),
 
+    # ---------------- Android Automotive: driving state & UX ----------------
+    _entry(
+        'car-ux-restrictions', 'CarUX',
+        r'CarUxRestrictions|CarDrivingState|UxRestriction',
+        'Driving-state UX restrictions are limiting the UI',
+        'CarUxRestrictionsManager gates distracting UI by driving state (parked / '
+        'idling / moving), driven by CarDrivingStateService from gear and speed. A '
+        'feature that "stops working" while driving is usually restricted by the '
+        'current UX restrictions — configured per-OEM in '
+        'car_ux_restrictions_map.xml — not broken. Apps must listen for restriction '
+        'changes and adapt instead of assuming a fixed state.',
+    ),
+    _entry(
+        'car-activity-blocked', 'CarUX',
+        r'ActivityBlockingActivity|not distraction optimized|distractionOptimized',
+        'Activity blocked while driving (not distraction-optimized)',
+        'AAOS replaced the foreground activity with ActivityBlockingActivity because '
+        'it is not marked distraction-optimized. To be usable while driving, an '
+        'activity needs the <meta-data android:name="distractionOptimized" '
+        'android:value="true"/> declaration AND must actually comply with UX '
+        'restrictions; system allowlisting (config_systemActivityWhitelist) applies '
+        'to platform apps.',
+    ),
+    _entry(
+        'car-occupant-zone', 'CarOccupantZone',
+        r'CarOccupantZone|OccupantZoneInfo|occupant zone',
+        'Occupant zone configuration / display assignment issue',
+        'CarOccupantZoneService maps occupants (driver, passengers) to seats, '
+        'displays, and users from config_occupant_zones and '
+        'config_occupant_display_mapping. Multi-display problems — an app or user on '
+        'the wrong display, a passenger display with no user — usually trace to '
+        'these configs not matching the real display layout.',
+    ),
+
     # ---------------- Android Automotive: services ----------------
     _entry(
         'car-telemetry', 'CarTelemetry',
@@ -366,6 +400,144 @@ KNOWLEDGE = [
         'the exit.',
     ),
 
+    # ---------------- ANR triggers / main-thread health ----------------
+    _entry(
+        'anr-input-dispatch', 'ANR',
+        r'Input (?:event )?dispatching timed out',
+        'ANR trigger: input dispatch timeout (main thread blocked >5s)',
+        '"Input dispatching timed out" is the classic ANR trigger: the app\'s main '
+        'thread did not process input within ~5 seconds. The log line names the '
+        'blocked window; the real evidence is the main-thread stack in the ANR '
+        'trace (data/anr/, or the "main" thread section of the bugreport) — look '
+        'for binder calls, lock contention, or disk I/O on the main thread.',
+    ),
+    _entry(
+        'anr-broadcast-timeout', 'ANR',
+        r'Timeout of broadcast',
+        'ANR trigger: broadcast receiver took too long',
+        'A broadcast receiver exceeded its deadline (~10s foreground / ~60s '
+        'background), which raises an ANR against the receiving process. Receivers '
+        'must not do real work in onReceive() — move it to a service/WorkManager, '
+        'or use goAsync() with a prompt finish().',
+    ),
+    _entry(
+        'anr-service-timeout', 'ANR',
+        r'Timeout executing service',
+        'ANR trigger: Service lifecycle method took too long',
+        'A Service did not return from onCreate/onStartCommand within ~20s '
+        '(foreground) / ~200s (background), raising an ANR. Service lifecycle '
+        'callbacks run on the main thread — move blocking work onto a background '
+        'thread and return quickly.',
+    ),
+    _entry(
+        'slow-main-thread', 'Performance',
+        r'Slow (?:dispatch|delivery) took \d+',
+        'Main-thread handler congestion (slow dispatch/delivery)',
+        '"Slow dispatch took Nms" / "Slow delivery took Nms" means a Handler '
+        'message occupied (or waited for) a looper thread far too long — in '
+        'system_server this is a leading indicator of watchdog kills and ANRs. The '
+        'named handler/message tells you which subsystem is congested; look for '
+        'what is blocking that thread.',
+    ),
+    _entry(
+        'strictmode-violation', 'Performance',
+        r'StrictMode policy violation',
+        'StrictMode violation — main-thread I/O or resource leak',
+        'StrictMode flagged a policy violation: typically disk/network I/O on the '
+        'main thread, or a leaked resource (unclosed Closeable, Activity leak). The '
+        'accompanying stack trace points at the violating call — fix the call site '
+        'rather than relaxing the policy; on user builds these become jank/ANRs.',
+    ),
+
+    # ---------------- Runtime / native health ----------------
+    _entry(
+        'jni-error', 'Runtime',
+        r'JNI DETECTED ERROR IN APPLICATION',
+        'CheckJNI abort: invalid JNI usage in native code',
+        'ART\'s CheckJNI detected illegal JNI usage — e.g. a stale local/global '
+        'reference, wrong method signature, or calling into JNI from a detached '
+        'thread — and aborted the process. The message names the exact violation '
+        'and the native frame; fix the JNI code (the error is real even if it '
+        '"worked" before, CheckJNI just caught it).',
+    ),
+    _entry(
+        'fdsan-error', 'Runtime',
+        r'fdsan: attempted to close',
+        'fdsan: double-close / wrong-owner close of a file descriptor',
+        'fdsan detected a file descriptor being closed by code that does not own '
+        'it — almost always a double-close bug, which can corrupt an unrelated fd '
+        'reused in between. The report names the owner; find the code path closing '
+        'an fd it already closed or never owned. Fatal on modern Android (fdsan '
+        'fatal mode), a silent data-corruption bug on older releases.',
+    ),
+
+    # ---------------- HALs / VINTF / boot ----------------
+    _entry(
+        'hal-service-wait', 'HAL',
+        r'Waited (?:one second|\d+ ?m?s(?:econds)?) for (?:interface )?\S+(?:::I\w+|@\d+\.\d+|/default)',
+        'Waiting on a HAL service that has not registered',
+        'servicemanager/hwservicemanager is waiting for a HAL to register (e.g. '
+        '"Waited one second for ...IVehicle/default"). Repeated waits mean the HAL '
+        'process is not running or failed to register: check the HAL\'s init .rc '
+        'service is defined and started, whether its process is crash-looping, avc '
+        'denials for its domain, and that it is declared in the VINTF device '
+        'manifest.',
+    ),
+    _entry(
+        'vintf-incompatible', 'VINTF',
+        r'checkvintf|(?:in)?compatible with (?:the )?(?:framework|device) (?:compatibility matrix|manifest)|VINTF',
+        'VINTF manifest / compatibility-matrix mismatch',
+        'The VINTF check failed: the device manifest (HALs the vendor provides) '
+        'and the framework compatibility matrix (HALs the system requires) do not '
+        'agree. Common after mixing system/vendor images from different builds, or '
+        'adding a HAL without declaring it in the device manifest. `checkvintf` '
+        'output names the exact missing/mismatched interface and version.',
+    ),
+    _entry(
+        'dm-verity', 'Boot',
+        r'dm-verity|verity.*corrupt',
+        'dm-verity integrity failure on a verified partition',
+        'dm-verity detected corruption on a verity-protected partition (system/'
+        'vendor), which blocks or degrades boot. On dev devices this is usually a '
+        'modified partition without disabling verity — run `adb disable-verity` '
+        '(userdebug) or reflash the image; on user builds it indicates real '
+        'corruption or a bad flash.',
+    ),
+
+    # ---------------- Packages / ART ----------------
+    _entry(
+        'install-failed', 'Package',
+        r'INSTALL_FAILED_[A-Z_]+',
+        'Package install failed — the code names the exact cause',
+        'An APK install failed; the INSTALL_FAILED_* code is the diagnosis: '
+        'VERSION_DOWNGRADE (installed version is newer — uninstall first or '
+        'install with -d on debuggable builds), UPDATE_INCOMPATIBLE (signature '
+        'mismatch with the installed app — uninstall first), '
+        'MISSING_SHARED_LIBRARY (a <uses-library> is absent on this image — common '
+        'on AAOS when an app expects GMS/car libraries the target lacks), '
+        'INSUFFICIENT_STORAGE, or TEST_ONLY (needs -t).',
+    ),
+    _entry(
+        'dexopt-fail', 'Package',
+        r'dex2oat.{0,40}(?:fail|error)|Failed to dexopt|dexopt fail',
+        'dex2oat / dexopt failure while compiling an app',
+        'dexopt (dex2oat) failed to AOT-compile a package. The app usually still '
+        'runs (falling back to JIT/interpreter, slower), but boot-time "Failed to '
+        'dexopt" spam or a persistent failure points at a corrupt APK/profile, '
+        'insufficient storage, or a dex file the verifier rejects. Check the '
+        'dex2oat stderr in the same log block.',
+    ),
+    _entry(
+        'apexd-fail', 'Package',
+        r'apexd.{0,60}(?:fail|error|revert)',
+        'APEX module activation failure (apexd)',
+        'apexd failed to activate or staged-install an APEX module. A failing APEX '
+        'can hold critical platform code (ART, media, VHAL on some builds); apexd '
+        'may revert to the factory APEX and reboot. Look for the specific .apex '
+        'name and the verification error — a version/key mismatch with the build '
+        'is the usual cause on dev flashes.',
+    ),
+
     # ---------------- Build (soong / ninja / linker / sepolicy) ----------------
     _entry(
         'ninja-subcommand-failed', 'Build',
@@ -394,6 +566,16 @@ KNOWLEDGE = [
         'does not match any defined module. Check for a typo, a missing Android.bp, '
         'or a module gated behind a soong_config/product variable that is off for '
         'this lunch target.',
+    ),
+    _entry(
+        'api-check-failed', 'Build',
+        r'checkapi|current\.txt|has been previously approved|compatibility problems checking',
+        'API check failed — public API changed without updating current.txt',
+        'The build\'s API check (metalava) found the public/system API no longer '
+        'matches the checked-in current.txt. If the API change is intentional, run '
+        '`m update-api` and commit the regenerated api/current.txt alongside the '
+        'code; if not, make the new surface @hide/private. Never hand-edit '
+        'current.txt to silence it.',
     ),
 ]
 
@@ -728,6 +910,179 @@ VHAL_PROPERTIES = {
         'EVS_SERVICE_REQUEST triggers starting/stopping an EVS service such as the '
         'rearview camera. System property; used to bring the camera up quickly, '
         'often before Android is fully booted.'),
+
+    # --- Speed / steering extras ---
+    'WHEEL_TICK': ('per-wheel rotation ticks (dead reckoning)',
+        'WHEEL_TICK reports cumulative per-wheel rotation counts, used for dead-'
+        'reckoning positioning when GNSS is unavailable (tunnels, garages). '
+        'Read-only continuous property, requires Car.PERMISSION_SPEED.'),
+    'PERF_REAR_STEERING_ANGLE': ('rear wheel steering angle (degrees)',
+        'PERF_REAR_STEERING_ANGLE is the rear-wheel angle in degrees on vehicles '
+        'with rear steering (left negative). Read-only, requires '
+        'Car.PERMISSION_READ_STEERING_STATE.'),
+
+    # --- Engine extras ---
+    'ENGINE_OIL_LEVEL': ('engine oil level (critically low…high)',
+        'ENGINE_OIL_LEVEL reports the oil level as an enum (CRITICALLY_LOW, LOW, '
+        'NORMAL, HIGH, ERROR). Read-only, requires Car.PERMISSION_CAR_ENGINE_DETAILED.'),
+
+    # --- EV powertrain extras ---
+    'EV_REGENERATIVE_BRAKING_STATE': ('regenerative braking state',
+        'EV_REGENERATIVE_BRAKING_STATE reports whether regenerative braking is '
+        'disabled, partially or fully enabled. Read-only, requires '
+        'Car.PERMISSION_POWERTRAIN.'),
+    'EV_BRAKE_REGENERATION_LEVEL': ('adjustable regen braking level',
+        'EV_BRAKE_REGENERATION_LEVEL is the user-selectable regenerative-braking '
+        'strength (0..max from the property config). Read requires '
+        'Car.PERMISSION_POWERTRAIN; write requires Car.PERMISSION_CONTROL_POWERTRAIN.'),
+
+    # --- Display units extras ---
+    'EV_BATTERY_DISPLAY_UNITS': ('EV battery unit shown to driver',
+        'EV_BATTERY_DISPLAY_UNITS is the energy unit (e.g. Wh/kWh/percent) shown to '
+        'the driver for EV battery. Read Car.PERMISSION_READ_DISPLAY_UNITS; write '
+        'Car.PERMISSION_CONTROL_DISPLAY_UNITS.'),
+    'VEHICLE_SPEED_DISPLAY_UNITS': ('speed unit (km/h / mph) shown to driver',
+        'VEHICLE_SPEED_DISPLAY_UNITS is the speed unit shown to the driver. Read '
+        'Car.PERMISSION_READ_DISPLAY_UNITS; write Car.PERMISSION_CONTROL_DISPLAY_UNITS.'),
+    'TIRE_PRESSURE_DISPLAY_UNITS': ('tire pressure unit (kPa/PSI/bar) shown to driver',
+        'TIRE_PRESSURE_DISPLAY_UNITS is the tire-pressure unit shown to the driver. '
+        'Read Car.PERMISSION_READ_DISPLAY_UNITS; write Car.PERMISSION_CONTROL_DISPLAY_UNITS.'),
+
+    # --- HVAC extras (2) ---
+    'HVAC_MAX_AC_ON': ('MAX A/C mode (bool)',
+        'HVAC_MAX_AC_ON enables MAX A/C — the HAL may override fan speed, '
+        'recirculation and A/C to cool fastest. Read/write, requires '
+        'Car.PERMISSION_CONTROL_CAR_CLIMATE.'),
+    'HVAC_MAX_DEFROST_ON': ('MAX defrost mode per zone (bool)',
+        'HVAC_MAX_DEFROST_ON enables maximum defrost; the HAL may override fan and '
+        'temperature settings for the zone. Zoned read/write, requires '
+        'Car.PERMISSION_CONTROL_CAR_CLIMATE.'),
+    'HVAC_TEMPERATURE_DISPLAY_UNITS': ('HVAC temp unit (°C/°F) shown to driver',
+        'HVAC_TEMPERATURE_DISPLAY_UNITS is the temperature unit the HVAC UI shows '
+        '(Celsius/Fahrenheit). Read/write with Car.PERMISSION_CONTROL_CAR_CLIMATE '
+        '(also readable via display-units permissions on newer releases).'),
+    'HVAC_FAN_DIRECTION_AVAILABLE': ('valid fan directions per zone (static)',
+        'HVAC_FAN_DIRECTION_AVAILABLE is the static list of fan-direction '
+        'combinations the zone supports; HVAC_FAN_DIRECTION writes must use one of '
+        'these values. Static, requires Car.PERMISSION_CONTROL_CAR_CLIMATE.'),
+    'HVAC_AUTO_RECIRC_ON': ('automatic recirculation (bool)',
+        'HVAC_AUTO_RECIRC_ON lets the car switch recirculation automatically (e.g. '
+        'on poor air quality). Read/write, requires Car.PERMISSION_CONTROL_CAR_CLIMATE.'),
+    'HVAC_SIDE_MIRROR_HEAT': ('side-mirror heater level',
+        'HVAC_SIDE_MIRROR_HEAT sets mirror heating (0 off, higher = hotter). Zoned '
+        'read/write, requires Car.PERMISSION_CONTROL_CAR_MIRRORS.'),
+    'HVAC_SEAT_VENTILATION': ('seat ventilation level per seat',
+        'HVAC_SEAT_VENTILATION is the seat ventilation (cooling airflow) level for '
+        'a seat area. Zoned read/write, requires Car.PERMISSION_CONTROL_CAR_SEATS.'),
+
+    # --- Mirrors (Car.PERMISSION_CONTROL_CAR_MIRRORS) ---
+    'MIRROR_FOLD': ('exterior mirror fold (bool)',
+        'MIRROR_FOLD folds/unfolds the exterior mirrors. Read/write, requires '
+        'Car.PERMISSION_CONTROL_CAR_MIRRORS.'),
+    'MIRROR_Z_POS': ('mirror tilt position',
+        'MIRROR_Z_POS is a mirror\'s vertical tilt position within its configured '
+        'range. Zoned read/write, requires Car.PERMISSION_CONTROL_CAR_MIRRORS.'),
+
+    # --- Windows / doors extras ---
+    'WINDOW_LOCK': ('child window lock (bool)',
+        'WINDOW_LOCK disables passenger window switches (child lock). Zoned '
+        'read/write, requires Car.PERMISSION_CONTROL_CAR_WINDOWS.'),
+    'WINDOW_MOVE': ('window movement command',
+        'WINDOW_MOVE commands a window to move (sign = direction, magnitude = '
+        'speed; 0 stops). Write-mostly zoned property, requires '
+        'Car.PERMISSION_CONTROL_CAR_WINDOWS.'),
+    'DOOR_MOVE': ('powered door movement command',
+        'DOOR_MOVE commands a powered door to open/close (sign = direction; 0 '
+        'stops). Zoned, requires Car.PERMISSION_CONTROL_CAR_DOORS.'),
+
+    # --- Seats extras ---
+    'SEAT_MEMORY_SELECT': ('recall a stored seat position',
+        'SEAT_MEMORY_SELECT recalls a stored seat memory preset for the seat area '
+        '(write-only; SEAT_MEMORY_SET stores the current position to a preset). '
+        'Requires Car.PERMISSION_CONTROL_CAR_SEATS.'),
+
+    # --- Interior lights ---
+    'CABIN_LIGHTS_STATE': ('cabin light state',
+        'CABIN_LIGHTS_STATE reports whether cabin (dome) lights are on. Read-only, '
+        'requires Car.PERMISSION_READ_INTERIOR_LIGHTS; the *_SWITCH property (write) '
+        'needs Car.PERMISSION_CONTROL_INTERIOR_LIGHTS.'),
+    'CABIN_LIGHTS_SWITCH': ('cabin light switch position',
+        'CABIN_LIGHTS_SWITCH is the cabin-light switch position (may differ from '
+        'the actual state, e.g. door-triggered lighting). Read/write, requires '
+        'Car.PERMISSION_CONTROL_INTERIOR_LIGHTS.'),
+    'READING_LIGHTS_STATE': ('reading light state per seat',
+        'READING_LIGHTS_STATE reports a seat\'s reading light state. Zoned '
+        'read-only, requires Car.PERMISSION_READ_INTERIOR_LIGHTS.'),
+
+    # --- Exterior light switches (Car.PERMISSION_CONTROL_EXTERIOR_LIGHTS) ---
+    'HEADLIGHTS_SWITCH': ('headlight switch position',
+        'HEADLIGHTS_SWITCH is the headlight switch position (OFF/ON/AUTO/...), '
+        'which may differ from HEADLIGHTS_STATE under automatic lighting. '
+        'Read/write, requires Car.PERMISSION_CONTROL_EXTERIOR_LIGHTS.'),
+    'HIGH_BEAM_LIGHTS_SWITCH': ('high-beam switch position',
+        'HIGH_BEAM_LIGHTS_SWITCH is the high-beam switch position. Read/write, '
+        'requires Car.PERMISSION_CONTROL_EXTERIOR_LIGHTS.'),
+    'FOG_LIGHTS_SWITCH': ('fog light switch position',
+        'FOG_LIGHTS_SWITCH is the fog-light switch position. Read/write, requires '
+        'Car.PERMISSION_CONTROL_EXTERIOR_LIGHTS.'),
+    'HAZARD_LIGHTS_SWITCH': ('hazard light switch position',
+        'HAZARD_LIGHTS_SWITCH is the hazard-light switch position. Read/write, '
+        'requires Car.PERMISSION_CONTROL_EXTERIOR_LIGHTS.'),
+
+    # --- Wipers (Android 14+) ---
+    'WINDSHIELD_WIPERS_STATE': ('wiper state (off/on/service)',
+        'WINDSHIELD_WIPERS_STATE reports the current wiper state for a window '
+        'area. Read-only, requires Car.PERMISSION_READ_WINDSHIELD_WIPERS.'),
+    'WINDSHIELD_WIPERS_SWITCH': ('wiper switch position',
+        'WINDSHIELD_WIPERS_SWITCH is the wiper control position (OFF/MIST/'
+        'INTERMITTENT levels/AUTO). Read requires '
+        'Car.PERMISSION_READ_WINDSHIELD_WIPERS; write requires '
+        'Car.PERMISSION_CONTROL_WINDSHIELD_WIPERS.'),
+
+    # --- Vehicle info extras ---
+    'INFO_DRIVER_SEAT': ('driver seat location (static)',
+        'INFO_DRIVER_SEAT reports the driver seat position (LEFT/RIGHT/CENTER), '
+        'used to adapt UI and zoned property access. Static/read-only, requires '
+        'Car.PERMISSION_CAR_INFO.'),
+    'INFO_EXTERIOR_DIMENSIONS': ('vehicle exterior dimensions (static)',
+        'INFO_EXTERIOR_DIMENSIONS lists the vehicle\'s exterior measurements '
+        '(height, length, widths, wheelbase, track) in millimeters. Static/'
+        'read-only, requires Car.PERMISSION_PRIVILEGED_CAR_INFO.'),
+    'VEHICLE_CURB_WEIGHT': ('curb weight in kg (static)',
+        'VEHICLE_CURB_WEIGHT is the vehicle\'s curb weight in kilograms. Static/'
+        'read-only, requires Car.PERMISSION_PRIVILEGED_CAR_INFO.'),
+    'TRAILER_PRESENT': ('trailer attached (present/not/error)',
+        'TRAILER_PRESENT reports whether a trailer is attached. Read-only, '
+        'requires Car.PERMISSION_PRIVILEGED_CAR_INFO.'),
+
+    # --- ADAS (Android 14+; READ_ADAS_* to read, CONTROL_ADAS_SETTINGS to toggle) ---
+    'AUTOMATIC_EMERGENCY_BRAKING_ENABLED': ('AEB feature toggle (bool)',
+        'AUTOMATIC_EMERGENCY_BRAKING_ENABLED is whether automatic emergency '
+        'braking is enabled. Read requires Car.PERMISSION_READ_ADAS_SETTINGS; '
+        'write requires Car.PERMISSION_CONTROL_ADAS_SETTINGS.'),
+    'FORWARD_COLLISION_WARNING_STATE': ('FCW current state',
+        'FORWARD_COLLISION_WARNING_STATE reports the forward-collision warning '
+        'system\'s live state (no warning / warning). Read-only, requires '
+        'Car.PERMISSION_READ_ADAS_STATES.'),
+    'BLIND_SPOT_WARNING_STATE': ('blind spot warning state per side',
+        'BLIND_SPOT_WARNING_STATE reports blind-spot warning per mirror area. '
+        'Zoned read-only, requires Car.PERMISSION_READ_ADAS_STATES.'),
+    'LANE_DEPARTURE_WARNING_STATE': ('LDW current state',
+        'LANE_DEPARTURE_WARNING_STATE reports the lane-departure warning state '
+        '(none / warning left / warning right). Read-only, requires '
+        'Car.PERMISSION_READ_ADAS_STATES.'),
+    'LANE_KEEP_ASSIST_ENABLED': ('LKA feature toggle (bool)',
+        'LANE_KEEP_ASSIST_ENABLED is whether lane-keep assist is enabled. Read '
+        'requires Car.PERMISSION_READ_ADAS_SETTINGS; write requires '
+        'Car.PERMISSION_CONTROL_ADAS_SETTINGS.'),
+    'CRUISE_CONTROL_ENABLED': ('cruise control feature toggle (bool)',
+        'CRUISE_CONTROL_ENABLED is whether cruise control is enabled. Read '
+        'requires Car.PERMISSION_READ_ADAS_SETTINGS; write requires '
+        'Car.PERMISSION_CONTROL_ADAS_SETTINGS.'),
+    'CRUISE_CONTROL_STATE': ('cruise control live state',
+        'CRUISE_CONTROL_STATE reports the cruise-control system\'s live state '
+        '(enabled/activated/suspended/forced deactivation). Read-only, requires '
+        'Car.PERMISSION_READ_ADAS_STATES.'),
 }
 
 # One combined regex over all property names (longest-first so e.g.
