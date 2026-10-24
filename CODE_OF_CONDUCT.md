@@ -33,7 +33,7 @@ Examples of unacceptable behavior:
 ## Enforcement
 
 Instances of abusive, harassing, or otherwise unacceptable behavior may be
-reported to the project maintainers at **@Zoddiacc**. All complaints
+reported to the project maintainers via **@Zoddiacc on X**. All complaints
 will be reviewed and investigated promptly and fairly. Maintainers are obligated
 to respect the privacy and security of the reporter of any incident.
 
